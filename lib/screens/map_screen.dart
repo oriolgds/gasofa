@@ -20,6 +20,7 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
   final MapController _mapController = MapController();
   GasStation? _selectedStation;
   LatLngBounds? _currentBounds;
+  double _currentZoom = 6.0;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +58,10 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                 onTap: (_, __) => setState(() => _selectedStation = null),
                 onPositionChanged: (position, hasGesture) {
                   final bounds = position.visibleBounds;
-                  setState(() => _currentBounds = bounds);
+                  setState(() {
+                    _currentBounds = bounds;
+                    _currentZoom = position.zoom;
+                  });
                 },
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
@@ -108,6 +112,20 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                         return _currentBounds!.contains(
                           LatLng(s.latitude, s.longitude),
                         );
+                      }).toList();
+                    }
+
+                    // Zoom-based filtering:
+                    // If zoom < 10, show only cheap (green) stations
+                    if (_currentZoom < 10.0) {
+                      stations = stations.where((s) {
+                        final priceCategory =
+                            GasStationsProvider.getPriceCategory(
+                              s.getPrice(provider.selectedFuelType),
+                              provider.filteredStations,
+                              provider.selectedFuelType,
+                            );
+                        return priceCategory == PriceCategory.low;
                       }).toList();
                     }
 
@@ -218,12 +236,16 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                       ),
                     ),
                     const Spacer(),
-                    if (provider.loadingState == LoadingState.loading)
+                    if (provider.loadingState == LoadingState.loading ||
+                        provider.loadingState == LoadingState.syncing)
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withAlpha(13),
@@ -231,13 +253,29 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                             ),
                           ],
                         ),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.primary,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            if (provider.syncStatus != null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                provider.syncStatus!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                   ],

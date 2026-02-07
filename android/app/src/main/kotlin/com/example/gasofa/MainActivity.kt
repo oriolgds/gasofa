@@ -1,4 +1,4 @@
-package com.example.gasofa
+package com.oriolgds.gasofa
 
 import io.flutter.embedding.android.FlutterActivity
 

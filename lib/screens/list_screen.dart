@@ -2,10 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../config/constants.dart';
+import '../models/fuel_type.dart';
 import '../models/gas_station.dart';
 import '../providers/gas_stations_provider.dart';
+import 'station_detail_screen.dart';
 
 class ListScreenRedesigned extends StatelessWidget {
   const ListScreenRedesigned({super.key});
@@ -55,45 +56,48 @@ class ListScreenRedesigned extends StatelessWidget {
         right: 20,
         bottom: 20,
       ),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.gradientStart, AppColors.gradientEnd],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
+      decoration: BoxDecoration(color: AppColors.background),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withAlpha(26),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      provider.selectedFuelType.icon,
-                      size: 16,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      provider.selectedFuelType.displayName,
-                      style: TextStyle(
+              GestureDetector(
+                onTap: () => _showFuelPicker(context, provider),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withAlpha(26),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        provider.selectedFuelType.icon,
+                        size: 16,
                         color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 6),
+                      Text(
+                        provider.selectedFuelType.displayName,
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const Spacer(),
@@ -106,6 +110,46 @@ class ListScreenRedesigned extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+
+          // Search bar
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(8),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              onChanged: provider.setSearchQuery,
+              decoration: InputDecoration(
+                hintText: 'Buscar por nombre...',
+                hintStyle: TextStyle(color: AppColors.textLight, fontSize: 14),
+                border: InputBorder.none,
+                icon: Icon(
+                  Icons.search_rounded,
+                  color: AppColors.textLight,
+                  size: 20,
+                ),
+                suffixIcon: provider.searchQuery.isNotEmpty
+                    ? GestureDetector(
+                        onTap: () => provider.setSearchQuery(''),
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: AppColors.textLight,
+                          size: 18,
+                        ),
+                      )
+                    : null,
+              ),
+            ),
           ),
 
           if (cheapest != null) ...[
@@ -297,7 +341,7 @@ class ListScreenRedesigned extends StatelessWidget {
           station: station,
           fuelType: provider.selectedFuelType,
           priceCategory: priceCategory,
-          onTap: () => _openNavigation(context, station),
+          onTap: () => _navigateToDetail(context, station),
         );
       }, childCount: stations.length),
     );
@@ -395,14 +439,105 @@ class ListScreenRedesigned extends StatelessWidget {
     );
   }
 
-  Future<void> _openNavigation(BuildContext context, GasStation station) async {
-    final url = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}',
+  void _navigateToDetail(BuildContext context, GasStation station) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StationDetailScreen(station: station),
+      ),
     );
+  }
 
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
+  void _showFuelPicker(BuildContext context, GasStationsProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Tipo de combustible',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: FuelType.values.map((fuel) {
+                final isSelected = provider.selectedFuelType == fuel;
+                return GestureDetector(
+                  onTap: () {
+                    provider.setFuelType(fuel);
+                    Navigator.pop(context);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(12),
+                      border: isSelected
+                          ? null
+                          : Border.all(
+                              color: AppColors.textLight.withAlpha(51),
+                            ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          fuel.icon,
+                          size: 18,
+                          color: isSelected ? Colors.white : AppColors.text,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          fuel.displayName,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.text,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
   }
 }
 

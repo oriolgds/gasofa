@@ -40,6 +40,20 @@ class ApiService {
     }
   }
 
+  /// Fetch list of provinces
+  Future<List<Province>> fetchProvinces() async {
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}${ApiConstants.provinces}'),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = json.decode(response.body);
+      return data.map((json) => Province.fromJson(json)).toList();
+    } else {
+      throw Exception('Error al obtener provincias: ${response.statusCode}');
+    }
+  }
+
   /// Parse the JSON response and return list of GasStation
   List<GasStation> _parseStationsResponse(String responseBody) {
     final Map<String, dynamic> jsonData = json.decode(responseBody);
@@ -54,5 +68,19 @@ class ApiService {
         .map((stationJson) => GasStation.fromJson(stationJson))
         .where((station) => station.latitude != 0 && station.longitude != 0)
         .toList();
+  }
+}
+
+class Province {
+  final String id;
+  final String name;
+
+  Province({required this.id, required this.name});
+
+  factory Province.fromJson(Map<String, dynamic> json) {
+    return Province(
+      id: json['IDPovincia'] ?? '',
+      name: json['Provincia'] ?? '',
+    );
   }
 }
