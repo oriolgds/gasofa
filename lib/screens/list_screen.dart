@@ -1,0 +1,549 @@
+/// Redesigned list screen with full-screen scrolling
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../config/constants.dart';
+import '../models/gas_station.dart';
+import '../providers/gas_stations_provider.dart';
+
+class ListScreenRedesigned extends StatelessWidget {
+  const ListScreenRedesigned({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<GasStationsProvider>(
+      builder: (context, provider, _) {
+        return CustomScrollView(
+          slivers: [
+            // Header
+            SliverToBoxAdapter(child: _buildHeader(context, provider)),
+
+            // Content
+            if (provider.loadingState == LoadingState.loading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (provider.loadingState == LoadingState.error)
+              SliverFillRemaining(child: _buildErrorState(context, provider))
+            else if (provider.filteredStations.isEmpty)
+              SliverFillRemaining(child: _buildEmptyState(context))
+            else
+              _buildStationsList(context, provider),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, GasStationsProvider provider) {
+    final stations = provider.filteredStations;
+    final cheapest = stations.isNotEmpty
+        ? stations.reduce(
+            (a, b) =>
+                (a.getPrice(provider.selectedFuelType) ?? double.infinity) <
+                    (b.getPrice(provider.selectedFuelType) ?? double.infinity)
+                ? a
+                : b,
+          )
+        : null;
+
+    return Container(
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 16,
+        left: 20,
+        right: 20,
+        bottom: 20,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.gradientStart, AppColors.gradientEnd],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withAlpha(26),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      provider.selectedFuelType.icon,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      provider.selectedFuelType.displayName,
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              if (stations.isNotEmpty)
+                Text(
+                  '${stations.length} gasolineras',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+            ],
+          ),
+
+          if (cheapest != null) ...[
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(8),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.priceGood.withAlpha(26),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.local_offer_rounded,
+                      color: AppColors.priceGood,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Más barata',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          cheapest.name,
+                          style: TextStyle(
+                            color: AppColors.text,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        cheapest
+                                .getPrice(provider.selectedFuelType)
+                                ?.toStringAsFixed(3) ??
+                            '-',
+                        style: TextStyle(
+                          color: AppColors.priceGood,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                        ),
+                      ),
+                      Text(
+                        '€/L',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Sort options
+          if (stations.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildSortChip(
+                    context,
+                    provider,
+                    SortMode.price,
+                    '💰 Precio',
+                  ),
+                  const SizedBox(width: 8),
+                  _buildSortChip(
+                    context,
+                    provider,
+                    SortMode.distance,
+                    '📍 Distancia',
+                    enabled: provider.hasLocation,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildSortChip(
+                    context,
+                    provider,
+                    SortMode.combined,
+                    '⚖️ Combinado',
+                    enabled: provider.hasLocation,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSortChip(
+    BuildContext context,
+    GasStationsProvider provider,
+    SortMode mode,
+    String label, {
+    bool enabled = true,
+  }) {
+    final isSelected = provider.sortMode == mode;
+
+    return GestureDetector(
+      onTap: enabled ? () => provider.setSortMode(mode) : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: isSelected
+              ? null
+              : Border.all(color: AppColors.textLight.withAlpha(77)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: !enabled
+                ? AppColors.textLight
+                : isSelected
+                ? Colors.white
+                : AppColors.text,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStationsList(
+    BuildContext context,
+    GasStationsProvider provider,
+  ) {
+    final stations = provider.filteredStations;
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final station = stations[index];
+        final priceCategory = GasStationsProvider.getPriceCategory(
+          station.getPrice(provider.selectedFuelType),
+          stations,
+          provider.selectedFuelType,
+        );
+
+        return _StationCard(
+          station: station,
+          fuelType: provider.selectedFuelType,
+          priceCategory: priceCategory,
+          onTap: () => _openNavigation(context, station),
+        );
+      }, childCount: stations.length),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.local_gas_station_outlined,
+                size: 48,
+                color: AppColors.textLight,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'No hay gasolineras',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Cambia el tipo de combustible o espera mientras cargamos los datos',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, GasStationsProvider provider) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.priceHigh.withAlpha(26),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline_rounded,
+                size: 48,
+                color: AppColors.priceHigh,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Error al cargar',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              provider.errorMessage ?? 'Ocurrió un error inesperado',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () => provider.fetchStations(),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Reintentar'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openNavigation(BuildContext context, GasStation station) async {
+    final url = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=${station.latitude},${station.longitude}',
+    );
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+}
+
+class _StationCard extends StatelessWidget {
+  final GasStation station;
+  final dynamic fuelType;
+  final PriceCategory priceCategory;
+  final VoidCallback onTap;
+
+  const _StationCard({
+    required this.station,
+    required this.fuelType,
+    required this.priceCategory,
+    required this.onTap,
+  });
+
+  Color get priceColor {
+    switch (priceCategory) {
+      case PriceCategory.low:
+        return AppColors.priceGood;
+      case PriceCategory.medium:
+        return AppColors.priceMedium;
+      case PriceCategory.high:
+        return AppColors.priceHigh;
+      case PriceCategory.unknown:
+        return AppColors.textLight;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final price = station.getPrice(fuelType);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(8),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Price badge
+            Container(
+              width: 65,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: priceColor.withAlpha(26),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    price?.toStringAsFixed(3) ?? '-',
+                    style: TextStyle(
+                      color: priceColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    '€/L',
+                    style: TextStyle(
+                      color: priceColor.withAlpha(179),
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    station.name,
+                    style: TextStyle(
+                      color: AppColors.text,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    station.address,
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      if (station.distanceKm != null) ...[
+                        Icon(
+                          Icons.near_me_rounded,
+                          size: 14,
+                          color: AppColors.textLight,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          station.distanceFormatted,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      Icon(
+                        Icons.schedule_rounded,
+                        size: 14,
+                        color: AppColors.textLight,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          station.schedule,
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // Arrow
+            Icon(Icons.chevron_right_rounded, color: AppColors.textLight),
+          ],
+        ),
+      ),
+    );
+  }
+}
