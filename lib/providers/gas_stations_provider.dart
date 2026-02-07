@@ -292,9 +292,18 @@ class GasStationsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      if (_useLocation && _userPosition == null) {
-        await fetchUserLocation();
-      }
+      _syncStatus = 'Obteniendo datos iniciales...';
+      notifyListeners();
+
+      // Start both tasks in parallel
+      final locationFuture = (_useLocation && _userPosition == null)
+          ? fetchUserLocation()
+          : Future.value(true);
+
+      final provincesFuture = _apiService.fetchProvinces();
+
+      // Wait for location first to check validity
+      await locationFuture;
 
       if (_userPosition == null) {
         _errorMessage = 'Ubicación necesaria para cargar gasolineras cercanas';
@@ -303,10 +312,7 @@ class GasStationsProvider extends ChangeNotifier {
         return;
       }
 
-      _syncStatus = 'Obteniendo provincias cercanas...';
-      notifyListeners();
-
-      final allProvinces = await _apiService.fetchProvinces();
+      final allProvinces = await provincesFuture;
 
       final currentProvinceCode = _provinceLookupService
           .getProvinceCodeFromCoordinates(
