@@ -36,6 +36,10 @@ class GasStationsProvider extends ChangeNotifier {
   String _searchQuery = '';
   Set<String> _loadedProvinceCodes = {}; // Track which provinces we've loaded
 
+  // Cached filtered list to avoid recalculating on every access
+  List<GasStation> _cachedFilteredStations = [];
+  bool _needsFilterUpdate = true;
+
   // Getters
   List<GasStation> get stations => _stations;
   LoadingState get loadingState => _loadingState;
@@ -54,26 +58,39 @@ class GasStationsProvider extends ChangeNotifier {
     _loadFromDatabase();
   }
 
-  /// Get filtered stations (only those with selected fuel type price and matching search)
+  /// Get filtered stations (cached to avoid redundant calculations)
   List<GasStation> get filteredStations {
-    return _stations.where((s) {
-      if (!s.hasPrice(_selectedFuelType)) return false;
-      if (_searchQuery.isEmpty) return true;
-      return s.name.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+    if (_needsFilterUpdate) {
+      _cachedFilteredStations = _stations.where((s) {
+        if (!s.hasPrice(_selectedFuelType)) return false;
+        if (_searchQuery.isEmpty) return true;
+        return s.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      }).toList();
+      _needsFilterUpdate = false;
+    }
+    return _cachedFilteredStations;
+  }
+
+  /// Mark that filtered list needs to be recalculated
+  void _invalidateFilterCache() {
+    _needsFilterUpdate = true;
   }
 
   /// Set search query for filtering by name
   void setSearchQuery(String query) {
     _searchQuery = query;
+    _invalidateFilterCache();
     notifyListeners();
   }
 
   /// Set fuel type filter
   void setFuelType(FuelType fuelType) {
-    _selectedFuelType = fuelType;
-    _sortStations();
-    notifyListeners();
+    if (_selectedFuelType != fuelType) {
+      _selectedFuelType = fuelType;
+      _invalidateFilterCache();
+      _sortStations();
+      notifyListeners();
+    }
   }
 
   /// Set province filter
@@ -84,9 +101,11 @@ class GasStationsProvider extends ChangeNotifier {
 
   /// Set sort mode
   void setSortMode(SortMode mode) {
-    _sortMode = mode;
-    _sortStations();
-    notifyListeners();
+    if (_sortMode != mode) {
+      _sortMode = mode;
+      _sortStations();
+      notifyListeners();
+    }
   }
 
   /// Toggle use of user location
@@ -114,6 +133,7 @@ class GasStationsProvider extends ChangeNotifier {
     try {
       final entities = await _databaseService.getAllStations();
       _stations = entities.map((e) => e.toGasStation()).toList();
+      _invalidateFilterCache(); // Stations list changed, invalidate cache
 
       if (_stations.isNotEmpty) {
         if (_userPosition != null) {
@@ -225,19 +245,24 @@ class GasStationsProvider extends ChangeNotifier {
           // Track that we've loaded this province
           _loadedProvinceCodes.add(provinceCode);
 
-          // Refresh UI after each province for immediate feedback
-          final allEntities = await _databaseService.getAllStations();
-          _stations = allEntities.map((e) => e.toGasStation()).toList();
+          // Only update UI after first province (current) and after all nearby provinces
+          if (current == 1) {
+            // First province (current) - show immediately for quick feedback
+            _syncStatus = 'Provincia actual cargada, obteniendo cercanas...';
+            final allEntities = await _databaseService.getAllStations();
+            _stations = allEntities.map((e) => e.toGasStation()).toList();
+            _invalidateFilterCache();
 
-          if (_userPosition != null) {
-            _distanceService.calculateDistances(
-              _stations,
-              _userPosition!.latitude,
-              _userPosition!.longitude,
-            );
+            if (_userPosition != null) {
+              _distanceService.calculateDistances(
+                _stations,
+                _userPosition!.latitude,
+                _userPosition!.longitude,
+              );
+            }
+            _sortStations();
+            notifyListeners();
           }
-          _sortStations();
-          notifyListeners();
         } catch (e) {
           print('Error loading province $provinceName: $e');
           // Continue with next province
@@ -246,6 +271,20 @@ class GasStationsProvider extends ChangeNotifier {
         // Yield to UI thread to prevent freezing
         await Future.delayed(Duration.zero);
       }
+
+      // Final update after all nearby provinces are loaded
+      final allEntities = await _databaseService.getAllStations();
+      _stations = allEntities.map((e) => e.toGasStation()).toList();
+      _invalidateFilterCache();
+
+      if (_userPosition != null) {
+        _distanceService.calculateDistances(
+          _stations,
+          _userPosition!.latitude,
+          _userPosition!.longitude,
+        );
+      }
+      _sortStations();
 
       _syncStatus = null;
       _loadingState = LoadingState.loaded;
@@ -275,6 +314,8 @@ class GasStationsProvider extends ChangeNotifier {
         _sortByCombined();
         break;
     }
+    // Sorting changed the order, invalidate cache
+    _invalidateFilterCache();
   }
 
   /// Combined sort: balance between price and distance
