@@ -31,6 +31,9 @@ class GasStationsProvider extends ChangeNotifier {
 
   static const String _prefsKeyFuelType = 'selected_fuel_type';
   static const String _prefsKeyVisibleProvinces = 'visible_provinces';
+  static const String _prefsKeyListStationIds = 'list_station_ids';
+  static const String _prefsKeyLastLat = 'last_latitude';
+  static const String _prefsKeyLastLng = 'last_longitude';
 
   // State
   List<GasStation> _stations = [];
@@ -45,15 +48,19 @@ class GasStationsProvider extends ChangeNotifier {
   String _searchQuery = '';
   Set<String> _loadedProvinceCodes = {}; // Track which provinces we've loaded
   Set<String> _visibleProvinceCodes =
-      {}; // Track current + nearby provinces for list filtering
+      {}; // Track current + nearby provinces (Live/Temp)
+
+  // Stable List Data (Buffered) - Used by List View
+  List<GasStation> _listStations = [];
+  Set<String> _listVisibleProvinceNames = {};
 
   // Caching and Optimization
   Map<FuelType, List<GasStation>> _sortedStationsCache =
-      {}; // Cache for Price sort
+      {}; // Cache for Global Price sort (optional use)
   String? _processingStatus;
   Timer? _searchDebounce;
 
-  // Pre-calculated thresholds for the current filtered/sorted list
+  // Pre-calculated thresholds for the current LIST list (not global)
   // ensuring O(1) checks in list rendering instead of O(N)
   double? _lowPriceThreshold;
   double? _highPriceThreshold;
@@ -110,38 +117,17 @@ class GasStationsProvider extends ChangeNotifier {
   /// Get stations filtered by search, fuel AND province (for List)
   /// Only shows stations in the current or nearby provinces to avoid showing
   /// stations 500km away in the list.
+  /// Uses the STABLE buffered list to avoid jitter/updates during load.
   List<GasStation> get filteredStations {
-    final baseList = allFilteredStations;
+    // 1. Source is STABLE list (already sorted and filtered by province in _updateListStations)
+    // We just need to filter by Search + Valid Price
+    final sourceList = _listStations;
 
-    if (_visibleProvinceCodes.isEmpty && _visibleProvinceNames.isEmpty) {
-      // If we haven't determined location yet, strictly return nothing to avoid
-      // showing stations from the wrong side of the country.
-      // The user must wait for location/province determination.
-      return [];
-    }
-
-    return baseList.where((s) {
-      // We assume station.province contains the NAME, but we have CODES in _visibleProvinceCodes?
-      // Wait, StationEntity has 'province' distinct from ID?
-      // Looking at `GasStation` model: `final String province;`
-      // Looking at `ApiService`: `Province` has ID and Name.
-      // `GasStation.fromJSON`: `province: json['Provincia']` which is the NAME.
-      // So we need to match names or codes.
-      // The API returns Province names in the station object, not codes.
-      // But `fetchStationsByProvince` takes a CODE.
-      // So `_visibleProvinceCodes` has CODES.
-      // We need to know the mapping or store allowed NAMES.
-
-      // Let's check `_provinceLookupService`. It maps Code -> Bounds.
-      // It doesn't seem to map Code -> Name directly exposed, but `fetchProvinces` returns `Province` objects (ID, Name).
-      // So we should store allowed NAMES in `_visibleProvinceNames` instead of codes,
-      // OR we fetch the names when we fetch the codes.
-
-      // In `fetchStations`, we iterate over codes and get province names?
-      // Yes: `final provinceName = allProvinces.firstWhere(...)`.
-
-      // So let's filter by checking if the station's province NAME is in our allowed set.
-      return _visibleProvinceNames.contains(s.province);
+    // 2. Filter by Fuel & Search
+    return sourceList.where((s) {
+      if (!s.hasPrice(_selectedFuelType)) return false;
+      if (_searchQuery.isEmpty) return true;
+      return s.name.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
   }
 
@@ -169,15 +155,13 @@ class GasStationsProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsKeyFuelType, fuelType.name);
 
-    // Recalculate thresholds for the new fuel type immediately
+    // Recalculate thresholds for the new fuel type immediately for LIST
     _calculatePriceThresholds();
 
     notifyListeners();
 
-    // If not sorting by price, we might need to re-sort
-    if (_sortMode != SortMode.price) {
-      await _sortStationsAsync();
-    }
+    // Re-sort List Stations
+    await _sortListStationsAsync();
   }
 
   /// Set province filter
@@ -193,8 +177,8 @@ class GasStationsProvider extends ChangeNotifier {
     _sortMode = mode;
     notifyListeners(); // Notify to update UI selection state
 
-    // Sort asynchronously
-    await _sortStationsAsync();
+    // Sort List asynchronously
+    await _sortListStationsAsync();
   }
 
   /// Toggle use of user location
@@ -208,6 +192,7 @@ class GasStationsProvider extends ChangeNotifier {
     _userPosition = await _locationService.getCurrentPosition();
     if (_userPosition != null) {
       _useLocation = true;
+      _saveUserLocation(); // Cache location
       notifyListeners();
       return true;
     }
@@ -234,6 +219,9 @@ class GasStationsProvider extends ChangeNotifier {
         } catch (_) {}
       }
 
+      // Restore last known location to enable distance calcs immediately
+      await _restoreUserLocation();
+
       final savedProvinces = prefs.getStringList(_prefsKeyVisibleProvinces);
       if (savedProvinces != null) {
         _visibleProvinceNames = savedProvinces.toSet();
@@ -251,10 +239,36 @@ class GasStationsProvider extends ChangeNotifier {
           );
         }
 
-        // Initial sort and calculations
-        await _precalculateSortedLists(); // Pre-calc price lists
-        await _sortStationsAsync(); // Sort main list
-        _calculatePriceThresholds(); // Calc thresholds
+        // Initial logic to determine List content
+        final cachedListIds = prefs.getStringList(_prefsKeyListStationIds);
+
+        bool restoredFromCache = false;
+        if (cachedListIds != null && cachedListIds.isNotEmpty) {
+          final cachedStations = _stations
+              .where((s) => cachedListIds.contains(s.id))
+              .toList();
+          if (cachedStations.isNotEmpty) {
+            _listStations = cachedStations;
+            _listVisibleProvinceNames = _listStations
+                .map((s) => s.province)
+                .toSet();
+
+            // Sync global visible provinces if empty (first run fallback)
+            if (_visibleProvinceNames.isEmpty) {
+              _visibleProvinceNames = Set.from(_listVisibleProvinceNames);
+            }
+
+            // Sort the manually restored list
+            await _sortListStationsAsync();
+            restoredFromCache = true;
+          }
+        }
+
+        if (!restoredFromCache) {
+          // Fallback to province filter logic
+          _listVisibleProvinceNames = Set.from(_visibleProvinceNames);
+          await _updateListStationsAndSort();
+        }
 
         _loadingState = LoadingState.loaded;
       } else {
@@ -383,21 +397,25 @@ class GasStationsProvider extends ChangeNotifier {
           // Doing it here gives immediate feedback but might be jerky if not backgrounded.
           // Since we use background isolate now, it should be fine.
 
-          await _sortStationsAsync();
-          _calculatePriceThresholds();
+          // REMOVED intermediate sorting to prevent jitter/performance hit
+          // await _sortStationsAsync();
+          // _calculatePriceThresholds();
 
-          notifyListeners();
+          notifyListeners(); // Notify for Map dots only
         } catch (e) {
           print('Error loading province $provinceName: $e');
         }
       }
 
+      // Update visible provinces for list
+      _listVisibleProvinceNames = Set.from(_visibleProvinceNames);
+
+      // Final update of List Stations (Filter + Sort)
+      await _updateListStationsAndSort();
+
       _syncStatus = null;
       _loadingState = LoadingState.loaded;
       notifyListeners();
-
-      // Final full pre-calculation
-      await _precalculateSortedLists();
     } catch (e) {
       print('Fetch error: $e');
       _errorMessage = e.toString();
@@ -408,49 +426,112 @@ class GasStationsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pre-calculate sorted lists for all fuel types in background Isolate
-  Future<void> _precalculateSortedLists() async {
-    _processingStatus = 'Optimizando listas...';
-    notifyListeners();
+  /// Update _listStations by filtering _stations using _listVisibleProvinceNames
+  /// AND sorting it according to current settings.
+  Future<void> _updateListStationsAndSort() async {
+    if (_listVisibleProvinceNames.isEmpty) {
+      // If we don't have visible provinces set, we might default to all or none.
+      // Better to default to none or wait.
+      // But if user has data but no GPS, maybe show everything?
+      // User request: "List mode must function isolated... province only".
+      // So if no province selected/known, show nothing or cached province.
 
-    try {
-      // We process all fuel types in one go or separate tasks?
-      // One go is better to avoid overhead.
-      // But we can just use the generic sort for each.
-
-      for (final fuelType in FuelType.values) {
-        final sorted = await compute(_sortStationsWorker, {
-          'stations': _stations,
-          'mode': SortMode.price, // Always cache Price sort
-          'fuelType': fuelType,
-        });
-        _sortedStationsCache[fuelType] = sorted;
+      // If we have saved provinces, we used them. If empty, maybe empty list.
+      if (_stations.isNotEmpty && _visibleProvinceNames.isNotEmpty) {
+        _listVisibleProvinceNames = Set.from(_visibleProvinceNames);
       }
-    } catch (e) {
-      print('Error accessing isolate: $e');
     }
 
-    _processingStatus = null;
-    notifyListeners();
+    // STRICT Province Filtering
+    // Normalize string set for case-insensitive check if needed, but typically inputs are consistent.
+    // We'll trust exact match for now, or use loose match.
+    // API returns Uppercase usually.
+
+    _listStations = _stations.where((s) {
+      if (_listVisibleProvinceNames.contains(s.province)) return true;
+      // Backup check: Case insensitive
+      // Optimization: likely strict match works if data sources are consistent.
+      return false;
+    }).toList();
+
+    // Sort this specific list
+    await _sortListStationsAsync();
+
+    // Save state
+    _saveListState();
   }
 
-  /// Sort stations asynchronously using Isolate
-  Future<void> _sortStationsAsync() async {
+  /// Save the current list of station IDs to persistent storage
+  Future<void> _saveListState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ids = _listStations.map((s) => s.id).toList();
+      await prefs.setStringList(_prefsKeyListStationIds, ids);
+    } catch (e) {
+      print('Error saving list state: $e');
+    }
+  }
+
+  /// Save user location to persistent storage
+  Future<void> _saveUserLocation() async {
+    if (_userPosition == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_prefsKeyLastLat, _userPosition!.latitude);
+      await prefs.setDouble(_prefsKeyLastLng, _userPosition!.longitude);
+    } catch (e) {
+      print('Error saving location: $e');
+    }
+  }
+
+  /// Restore user location from persistent storage
+  Future<void> _restoreUserLocation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lat = prefs.getDouble(_prefsKeyLastLat);
+      final lng = prefs.getDouble(_prefsKeyLastLng);
+
+      if (lat != null && lng != null) {
+        _userPosition = Position(
+          latitude: lat,
+          longitude: lng,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          altitude: 0,
+          heading: 0,
+          speed: 0,
+          speedAccuracy: 0,
+          altitudeAccuracy: 0,
+          headingAccuracy: 0,
+        );
+        _useLocation = true;
+      }
+    } catch (e) {
+      print('Error restoring location: $e');
+    }
+  }
+
+  /// Sort the LIST stations asynchronously using Isolate
+  Future<void> _sortListStationsAsync() async {
     _processingStatus = 'Ordenando...';
     notifyListeners();
 
     try {
       // Use compute to run in background isolate
+      // We pass _listStations (snapshot) to sort.
       final sorted = await compute(_sortStationsWorker, {
-        'stations': _stations,
+        'stations': _listStations,
         'mode': _sortMode,
         'fuelType': _selectedFuelType,
       });
 
-      _stations = sorted;
+      _listStations = sorted;
 
       // Update thresholds based on new list/fuel type
       _calculatePriceThresholds();
+
+      // Save state after sort (order changes) or anytime list changes
+      _saveListState();
     } catch (e) {
       print('Sort error: $e');
     }
@@ -458,6 +539,9 @@ class GasStationsProvider extends ChangeNotifier {
     _processingStatus = null;
     notifyListeners();
   }
+
+  // Obsolete: _sortStationsAsync (Global) - We now use _sortListStationsAsync
+  // Keeping _sortStationsWorker as it is independent.
 
   /// Static worker function for Isolate
   static List<GasStation> _sortStationsWorker(Map<String, dynamic> args) {
@@ -691,7 +775,7 @@ class GasStationsProvider extends ChangeNotifier {
           _stations = allEntities.map((e) => e.toGasStation()).toList();
 
           // Re-sort/calc in background
-          _calculatePriceThresholds();
+          // _calculatePriceThresholds(); // Don't recalc List thresholds on Map update!
 
           // Notify listeners to update map with new data
           notifyListeners();
@@ -704,7 +788,7 @@ class GasStationsProvider extends ChangeNotifier {
       }
 
       // Final sort after batch
-      await _sortStationsAsync();
+      // await _sortStationsAsync(); // Map stations don't strongly need global sort.
     } finally {
       _isBackgroundLoading = false;
       notifyListeners();
@@ -714,16 +798,18 @@ class GasStationsProvider extends ChangeNotifier {
   /// Calculate price thresholds for the current station list and fuel type
   /// This is O(N) but only runs once when data/filter changes, not per item
   void _calculatePriceThresholds() {
-    if (_stations.isEmpty) {
+    if (_listStations.isEmpty) {
+      // Calculate thresholds based on LIST, not global
       _lowPriceThreshold = null;
       _highPriceThreshold = null;
       return;
     }
 
-    final prices = _stations
-        .map((s) => s.getPrice(_selectedFuelType))
-        .whereType<double>()
-        .toList();
+    final prices =
+        _listStations // Use _listStations
+            .map((s) => s.getPrice(_selectedFuelType))
+            .whereType<double>()
+            .toList();
 
     if (prices.isEmpty) {
       _lowPriceThreshold = null;
