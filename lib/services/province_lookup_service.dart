@@ -161,9 +161,32 @@ class ProvinceLookupService {
 
   /// Get all province codes except the specified ones
   /// Useful for getting remaining provinces to load in background
-  List<String> getRemainingProvinceCodes(List<String> excludeCodes) {
-    return _provinceBounds.keys
-        .where((code) => !excludeCodes.contains(code))
-        .toList();
+  /// Get list of province codes that intersect with the given bounds
+  List<String> getProvincesInBounds(
+    double minLat,
+    double maxLat,
+    double minLon,
+    double maxLon,
+  ) {
+    final List<String> intersectingProvinces = [];
+
+    for (final entry in _provinceBounds.entries) {
+      final bounds = entry.value;
+      final pMinLat = bounds[0];
+      final pMaxLat = bounds[1];
+      final pMinLon = bounds[2];
+      final pMaxLon = bounds[3];
+
+      // Check for intersection
+      // A rectangle intersects another if they overlap on both axes
+      bool latOverlap = (minLat <= pMaxLat) && (maxLat >= pMinLat);
+      bool lonOverlap = (minLon <= pMaxLon) && (maxLon >= pMinLon);
+
+      if (latOverlap && lonOverlap) {
+        intersectingProvinces.add(entry.key);
+      }
+    }
+
+    return intersectingProvinces;
   }
 }

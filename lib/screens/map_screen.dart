@@ -1,11 +1,13 @@
 /// Redesigned map screen with always-visible stations and price markers
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/constants.dart';
+import '../models/fuel_type.dart';
 import '../models/gas_station.dart';
 import '../providers/gas_stations_provider.dart';
 
@@ -18,9 +20,16 @@ class MapScreenRedesigned extends StatefulWidget {
 
 class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
   final MapController _mapController = MapController();
+  Timer? _debounce;
   GasStation? _selectedStation;
   LatLngBounds? _currentBounds;
   double _currentZoom = 6.0;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,8 +45,8 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
           centerLat = provider.userPosition!.latitude;
           centerLng = provider.userPosition!.longitude;
           zoom = 12.0;
-        } else if (provider.filteredStations.isNotEmpty) {
-          final stations = provider.filteredStations;
+        } else if (provider.allFilteredStations.isNotEmpty) {
+          final stations = provider.allFilteredStations;
           centerLat =
               stations.map((s) => s.latitude).reduce((a, b) => a + b) /
               stations.length;
@@ -57,10 +66,15 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                 initialZoom: zoom,
                 onTap: (_, __) => setState(() => _selectedStation = null),
                 onPositionChanged: (position, hasGesture) {
-                  final bounds = position.visibleBounds;
-                  setState(() {
-                    _currentBounds = bounds;
-                    _currentZoom = position.zoom;
+                  // Debounce map updates to prevent lag
+                  if (_debounce?.isActive ?? false) _debounce!.cancel();
+                  _debounce = Timer(const Duration(milliseconds: 200), () {
+                    if (mounted) {
+                      setState(() {
+                        _currentBounds = position.visibleBounds;
+                        _currentZoom = position.zoom;
+                      });
+                    }
                   });
                 },
                 interactionOptions: const InteractionOptions(
@@ -105,25 +119,22 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                 // Stations (sorted so green/cheap appear on top)
                 MarkerLayer(
                   markers: () {
-                    // Filter by viewport if bounds available
-                    var stations = provider.filteredStations;
-                    if (_currentBounds != null) {
-                      stations = stations.where((s) {
-                        return _currentBounds!.contains(
-                          LatLng(s.latitude, s.longitude),
-                        );
-                      }).toList();
-                    }
+                    // Use optimized grid-based filtering
+                    List<GasStation> stations;
 
-                    // Zoom-based filtering:
-                    // If zoom < 10, show only cheap (green) stations
-                    if (_currentZoom < 10.0) {
-                      stations = stations.where((s) {
-                        final priceCategory = provider.getCategoryForPrice(
-                          s.getPrice(provider.selectedFuelType),
-                        );
-                        return priceCategory == PriceCategory.low;
-                      }).toList();
+                    if (_currentBounds != null) {
+                      stations = provider.getStationsForMap(
+                        bounds: _currentBounds!,
+                        zoom: _currentZoom,
+                      );
+                    } else {
+                      // Fallback if no bounds yet (e.g. init)
+                      // Don't show anything until we know where we are, or show filtered if few
+                      if (provider.allFilteredStations.length < 50) {
+                        stations = provider.allFilteredStations;
+                      } else {
+                        stations = [];
+                      }
                     }
 
                     // Add price category to each station for sorting
@@ -194,39 +205,48 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                 decoration: BoxDecoration(color: AppColors.surface),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(13),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            provider.selectedFuelType.icon,
-                            size: 16,
-                            color: AppColors.text,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            provider.selectedFuelType.displayName,
-                            style: TextStyle(
-                              color: AppColors.text,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
+                    GestureDetector(
+                      onTap: () => _showFuelPicker(context, provider),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(13),
+                              blurRadius: 8,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              provider.selectedFuelType.icon,
+                              size: 16,
+                              color: AppColors.text,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              provider.selectedFuelType.displayName,
+                              style: TextStyle(
+                                color: AppColors.text,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 16,
+                              color: AppColors.text,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const Spacer(),
@@ -334,6 +354,98 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
           ],
         );
       },
+    );
+  }
+
+  void _showFuelPicker(BuildContext context, GasStationsProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textLight,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Tipo de combustible',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: FuelType.values.map((fuel) {
+                final isSelected = provider.selectedFuelType == fuel;
+                return GestureDetector(
+                  onTap: () {
+                    provider.setFuelType(fuel);
+                    Navigator.pop(context);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(12),
+                      border: isSelected
+                          ? null
+                          : Border.all(
+                              color: AppColors.textLight.withAlpha(51),
+                            ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          fuel.icon,
+                          size: 18,
+                          color: isSelected ? Colors.white : AppColors.text,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          fuel.displayName,
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : AppColors.text,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -4,6 +4,8 @@
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/fuel_type.dart';
@@ -28,6 +30,7 @@ class GasStationsProvider extends ChangeNotifier {
   final ProvinceLookupService _provinceLookupService = ProvinceLookupService();
 
   static const String _prefsKeyFuelType = 'selected_fuel_type';
+  static const String _prefsKeyVisibleProvinces = 'visible_provinces';
 
   // State
   List<GasStation> _stations = [];
@@ -41,6 +44,8 @@ class GasStationsProvider extends ChangeNotifier {
   bool _useLocation = false;
   String _searchQuery = '';
   Set<String> _loadedProvinceCodes = {}; // Track which provinces we've loaded
+  Set<String> _visibleProvinceCodes =
+      {}; // Track current + nearby provinces for list filtering
 
   // Caching and Optimization
   Map<FuelType, List<GasStation>> _sortedStationsCache =
@@ -76,9 +81,8 @@ class GasStationsProvider extends ChangeNotifier {
     _loadFromDatabase();
   }
 
-  /// Get filtered stations (only those with selected fuel type price and matching search)
-  /// Uses pre-calculated cache when sorting by price for instant switching
-  List<GasStation> get filteredStations {
+  /// Get all stations filtered by search and fuel, but NOT by province (for Map)
+  List<GasStation> get allFilteredStations {
     // 1. Select source list
     List<GasStation> sourceList;
 
@@ -102,6 +106,47 @@ class GasStationsProvider extends ChangeNotifier {
       return s.name.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
   }
+
+  /// Get stations filtered by search, fuel AND province (for List)
+  /// Only shows stations in the current or nearby provinces to avoid showing
+  /// stations 500km away in the list.
+  List<GasStation> get filteredStations {
+    final baseList = allFilteredStations;
+
+    if (_visibleProvinceCodes.isEmpty && _visibleProvinceNames.isEmpty) {
+      // If we haven't determined location yet, strictly return nothing to avoid
+      // showing stations from the wrong side of the country.
+      // The user must wait for location/province determination.
+      return [];
+    }
+
+    return baseList.where((s) {
+      // We assume station.province contains the NAME, but we have CODES in _visibleProvinceCodes?
+      // Wait, StationEntity has 'province' distinct from ID?
+      // Looking at `GasStation` model: `final String province;`
+      // Looking at `ApiService`: `Province` has ID and Name.
+      // `GasStation.fromJSON`: `province: json['Provincia']` which is the NAME.
+      // So we need to match names or codes.
+      // The API returns Province names in the station object, not codes.
+      // But `fetchStationsByProvince` takes a CODE.
+      // So `_visibleProvinceCodes` has CODES.
+      // We need to know the mapping or store allowed NAMES.
+
+      // Let's check `_provinceLookupService`. It maps Code -> Bounds.
+      // It doesn't seem to map Code -> Name directly exposed, but `fetchProvinces` returns `Province` objects (ID, Name).
+      // So we should store allowed NAMES in `_visibleProvinceNames` instead of codes,
+      // OR we fetch the names when we fetch the codes.
+
+      // In `fetchStations`, we iterate over codes and get province names?
+      // Yes: `final provinceName = allProvinces.firstWhere(...)`.
+
+      // So let's filter by checking if the station's province NAME is in our allowed set.
+      return _visibleProvinceNames.contains(s.province);
+    }).toList();
+  }
+
+  // Helper set for province names
+  Set<String> _visibleProvinceNames = {};
 
   /// Set search query with debounce
   void setSearchQuery(String query) {
@@ -189,6 +234,11 @@ class GasStationsProvider extends ChangeNotifier {
         } catch (_) {}
       }
 
+      final savedProvinces = prefs.getStringList(_prefsKeyVisibleProvinces);
+      if (savedProvinces != null) {
+        _visibleProvinceNames = savedProvinces.toSet();
+      }
+
       final entities = await _databaseService.getAllStations();
       _stations = entities.map((e) => e.toGasStation()).toList();
 
@@ -263,6 +313,28 @@ class GasStationsProvider extends ChangeNotifier {
         currentProvinceCode,
       );
       provincesToLoad.addAll(nearbyProvinceCodes);
+
+      // Clear previous visible set and add new ones
+      _visibleProvinceCodes = provincesToLoad.toSet();
+      _visibleProvinceNames.clear();
+
+      // Populate visible province names for filtering
+      for (final code in provincesToLoad) {
+        final p = allProvinces.firstWhere(
+          (p) => p.id == code,
+          orElse: () => Province(id: code, name: ''),
+        );
+        if (p.name.isNotEmpty) {
+          _visibleProvinceNames.add(p.name);
+        }
+      }
+
+      // Persist visible province names
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _prefsKeyVisibleProvinces,
+        _visibleProvinceNames.toList(),
+      );
 
       int total = provincesToLoad.length;
       int current = 0;
@@ -442,8 +514,8 @@ class GasStationsProvider extends ChangeNotifier {
         final maxDistFallback = distances.reduce((a, b) => a > b ? a : b);
 
         // Prioritize distance more heavily
-        const priceWeight = 0.35;
-        const distanceWeight = 0.65;
+        const priceWeight = 0.50;
+        const distanceWeight = 0.50;
 
         stations.sort((a, b) {
           final priceA = a.getPrice(fuelType) ?? maxPrice;
@@ -471,6 +543,172 @@ class GasStationsProvider extends ChangeNotifier {
     }
 
     return stations;
+  }
+
+  /// Get stations optimized for the map viewport (grid clustering)
+  /// Returns a subset of stations based on zoom level and bounds
+  List<GasStation> getStationsForMap({
+    required LatLngBounds bounds,
+    required double zoom,
+  }) {
+    // 1. If strict filtering is active (e.g. searching), just return those
+    // or maybe we still want clustering? Let's clustering always for performance.
+    // actually if user searches "Repsol", they want to see ALL Repsols.
+    // So if search query is active, disable clustering (unless result count is huge).
+
+    final sourceList = allFilteredStations; // Use unrestricted list for map
+
+    if (_searchQuery.isNotEmpty) {
+      if (sourceList.length < 50) return sourceList; // Show all if few
+    }
+
+    // 2. Filter by bounds first (coarse filter)
+    // Add some padding to bounds to avoid items popping in/out at edges
+    final paddedBounds = LatLngBounds(
+      LatLng(bounds.south - 0.1, bounds.west - 0.1),
+      LatLng(bounds.north + 0.1, bounds.east + 0.1),
+    );
+
+    final visibleStations = sourceList.where((s) {
+      return paddedBounds.contains(LatLng(s.latitude, s.longitude));
+    }).toList();
+
+    // 3. If zoom is high enough, return all visible
+    if (zoom >= 13.0) {
+      return visibleStations;
+    }
+
+    // 4. Grid clustering based on zoom
+    // Lower zoom = larger grid cells = fewer stations
+    // Grid size in degrees approx.
+    double gridSize;
+    int maxPerCell;
+
+    // Trigger background load for visible provinces
+    _scheduleProvinceCheck(bounds);
+
+    if (zoom <= 6) {
+      gridSize = 2.0; // Whole Spain view -> very coarse (approx 200km)
+      maxPerCell = 1;
+    } else if (zoom <= 8) {
+      gridSize = 0.8; // Region view (approx 80km)
+      maxPerCell = 1;
+    } else if (zoom <= 10) {
+      gridSize = 0.25; // Province view (approx 25km)
+      maxPerCell = 1; // Only 1 best station per 25km block
+    } else if (zoom <= 11.5) {
+      gridSize = 0.05; // City approach
+      maxPerCell = 2;
+    } else {
+      // Zoom > 11.5
+      gridSize = 0.01; // City details
+      maxPerCell = 3;
+    }
+
+    final Map<String, List<GasStation>> grid = {};
+
+    for (var s in visibleStations) {
+      // Calculate grid key
+      final latKey = (s.latitude / gridSize).floor();
+      final lngKey = (s.longitude / gridSize).floor();
+      final key = '$latKey,$lngKey';
+
+      if (!grid.containsKey(key)) {
+        grid[key] = [];
+      }
+      grid[key]!.add(s);
+    }
+
+    final List<GasStation> result = [];
+
+    grid.forEach((key, stationsInCell) {
+      if (stationsInCell.length <= maxPerCell) {
+        result.addAll(stationsInCell);
+      } else {
+        // Sort by CURRENT fuel price
+        stationsInCell.sort((a, b) {
+          final pA = a.getPrice(_selectedFuelType) ?? double.infinity;
+          final pB = b.getPrice(_selectedFuelType) ?? double.infinity;
+          return pA.compareTo(pB);
+        });
+        result.addAll(stationsInCell.take(maxPerCell));
+      }
+    });
+
+    return result;
+  }
+
+  Timer? _bgLoadTimer;
+  bool _isBackgroundLoading = false;
+
+  void _scheduleProvinceCheck(LatLngBounds bounds) {
+    if (_bgLoadTimer?.isActive ?? false) return;
+
+    // Debounce to avoid checking on every frame/pan
+    _bgLoadTimer = Timer(const Duration(seconds: 1), () {
+      _checkAndLoadProvinces(bounds);
+    });
+  }
+
+  Future<void> _checkAndLoadProvinces(LatLngBounds bounds) async {
+    if (_isBackgroundLoading) return;
+
+    final visibleProvinces = _provinceLookupService.getProvincesInBounds(
+      bounds.south,
+      bounds.north,
+      bounds.west,
+      bounds.east,
+    );
+
+    final missingProvinces = visibleProvinces
+        .where((code) => !_loadedProvinceCodes.contains(code))
+        .toList();
+
+    if (missingProvinces.isEmpty) return;
+
+    _isBackgroundLoading = true;
+    notifyListeners(); // Optionally notify to show a small loader?
+
+    try {
+      // Load one by one to keep UI responsive
+      for (final provinceCode in missingProvinces) {
+        // Double check if already loaded by another process
+        if (_loadedProvinceCodes.contains(provinceCode)) continue;
+
+        try {
+          final stations = await _apiService.fetchStationsByProvince(
+            provinceCode,
+          );
+          final entities = stations
+              .map((s) => StationEntity.fromGasStation(s))
+              .toList();
+
+          await _databaseService.saveStations(entities);
+          _loadedProvinceCodes.add(provinceCode);
+
+          // Update in-memory list
+          final allEntities = await _databaseService.getAllStations();
+          _stations = allEntities.map((e) => e.toGasStation()).toList();
+
+          // Re-sort/calc in background
+          _calculatePriceThresholds();
+
+          // Notify listeners to update map with new data
+          notifyListeners();
+
+          // Small delay to yield to UI
+          await Future.delayed(const Duration(milliseconds: 100));
+        } catch (e) {
+          print('Error bg loading province $provinceCode: $e');
+        }
+      }
+
+      // Final sort after batch
+      await _sortStationsAsync();
+    } finally {
+      _isBackgroundLoading = false;
+      notifyListeners();
+    }
   }
 
   /// Calculate price thresholds for the current station list and fuel type

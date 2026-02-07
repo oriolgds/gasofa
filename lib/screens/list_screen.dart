@@ -61,6 +61,7 @@ class ListScreenRedesigned extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               GestureDetector(
                 onTap: () => _showFuelPicker(context, provider),
@@ -100,56 +101,66 @@ class ListScreenRedesigned extends StatelessWidget {
                   ),
                 ),
               ),
-              const Spacer(),
-              // Show spinner when processing or syncing, otherwise show count
-              if (provider.loadingState == LoadingState.syncing ||
-                  provider.processingStatus != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          provider.processingStatus ??
-                              provider.syncStatus ??
-                              'Cargando...',
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: Builder(
+                    builder: (context) {
+                      if (provider.loadingState == LoadingState.syncing ||
+                          provider.processingStatus != null) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceVariant,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  provider.processingStatus ??
+                                      provider.syncStatus ??
+                                      'Cargando...',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      } else if (stations.isNotEmpty) {
+                        return Text(
+                          '${stations.length} gasolineras',
                           style: TextStyle(
                             color: AppColors.textSecondary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
                           ),
                           overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else if (stations.isNotEmpty)
-                Text(
-                  '${stations.length} gasolineras',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
                   ),
                 ),
+              ),
             ],
           ),
 
