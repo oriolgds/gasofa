@@ -27,7 +27,20 @@ class FuelTypeSelector extends StatelessWidget {
           final isSelected = fuelType == selectedFuelType;
 
           return FilterChip(
-            label: Text('${fuelType.icon} ${fuelType.displayName}'),
+            label: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  fuelType.icon,
+                  size: 16,
+                  color: isSelected
+                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                      : Theme.of(context).colorScheme.onSurface,
+                ),
+                const SizedBox(width: 6),
+                Text(fuelType.displayName),
+              ],
+            ),
             selected: isSelected,
             onSelected: (_) => onChanged(fuelType),
             backgroundColor: Theme.of(context).colorScheme.surface,

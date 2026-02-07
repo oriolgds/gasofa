@@ -79,9 +79,10 @@ class ListScreenRedesigned extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
+                    Icon(
                       provider.selectedFuelType.icon,
-                      style: const TextStyle(fontSize: 16),
+                      size: 16,
+                      color: AppColors.primary,
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -201,14 +202,16 @@ class ListScreenRedesigned extends StatelessWidget {
                     context,
                     provider,
                     SortMode.price,
-                    '💰 Precio',
+                    Icons.euro,
+                    'Precio',
                   ),
                   const SizedBox(width: 8),
                   _buildSortChip(
                     context,
                     provider,
                     SortMode.distance,
-                    '📍 Distancia',
+                    Icons.near_me,
+                    'Distancia',
                     enabled: provider.hasLocation,
                   ),
                   const SizedBox(width: 8),
@@ -216,7 +219,8 @@ class ListScreenRedesigned extends StatelessWidget {
                     context,
                     provider,
                     SortMode.combined,
-                    '⚖️ Combinado',
+                    Icons.balance,
+                    'Combinado',
                     enabled: provider.hasLocation,
                   ),
                 ],
@@ -232,10 +236,16 @@ class ListScreenRedesigned extends StatelessWidget {
     BuildContext context,
     GasStationsProvider provider,
     SortMode mode,
+    IconData icon,
     String label, {
     bool enabled = true,
   }) {
     final isSelected = provider.sortMode == mode;
+    final color = !enabled
+        ? AppColors.textLight
+        : isSelected
+        ? Colors.white
+        : AppColors.text;
 
     return GestureDetector(
       onTap: enabled ? () => provider.setSortMode(mode) : null,
@@ -249,17 +259,20 @@ class ListScreenRedesigned extends StatelessWidget {
               ? null
               : Border.all(color: AppColors.textLight.withAlpha(77)),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: !enabled
-                ? AppColors.textLight
-                : isSelected
-                ? Colors.white
-                : AppColors.text,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            fontSize: 13,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
       ),
     );

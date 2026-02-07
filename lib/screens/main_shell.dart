@@ -138,9 +138,10 @@ class _MainShellState extends State<MainShell> {
               ],
             ),
             child: Center(
-              child: Text(
+              child: Icon(
                 provider.selectedFuelType.icon,
-                style: const TextStyle(fontSize: 26),
+                size: 26,
+                color: Colors.white,
               ),
             ),
           ),
@@ -213,7 +214,11 @@ class _MainShellState extends State<MainShell> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(fuel.icon, style: const TextStyle(fontSize: 18)),
+                        Icon(
+                          fuel.icon,
+                          size: 18,
+                          color: isSelected ? Colors.white : AppColors.text,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           fuel.displayName,

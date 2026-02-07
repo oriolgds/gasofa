@@ -19,6 +19,7 @@ class MapScreenRedesigned extends StatefulWidget {
 class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
   final MapController _mapController = MapController();
   GasStation? _selectedStation;
+  LatLngBounds? _currentBounds;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +55,13 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                 initialCenter: LatLng(centerLat, centerLng),
                 initialZoom: zoom,
                 onTap: (_, __) => setState(() => _selectedStation = null),
+                onPositionChanged: (position, hasGesture) {
+                  final bounds = position.visibleBounds;
+                  setState(() => _currentBounds = bounds);
+                },
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                ),
               ),
               children: [
                 // OpenStreetMap tiles
@@ -90,35 +98,71 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                     ],
                   ),
 
-                // Stations
+                // Stations (sorted so green/cheap appear on top)
                 MarkerLayer(
-                  markers: provider.filteredStations.map((station) {
-                    final priceCategory = GasStationsProvider.getPriceCategory(
-                      station.getPrice(provider.selectedFuelType),
-                      provider.filteredStations,
-                      provider.selectedFuelType,
-                    );
+                  markers: () {
+                    // Filter by viewport if bounds available
+                    var stations = provider.filteredStations;
+                    if (_currentBounds != null) {
+                      stations = stations.where((s) {
+                        return _currentBounds!.contains(
+                          LatLng(s.latitude, s.longitude),
+                        );
+                      }).toList();
+                    }
 
-                    return Marker(
-                      point: LatLng(station.latitude, station.longitude),
-                      width: 60,
-                      height: 36,
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _selectedStation = station);
-                          _mapController.move(
-                            LatLng(station.latitude, station.longitude),
-                            _mapController.camera.zoom,
+                    // Add price category to each station for sorting
+                    final stationsWithCategory = stations.map((station) {
+                      final priceCategory =
+                          GasStationsProvider.getPriceCategory(
+                            station.getPrice(provider.selectedFuelType),
+                            provider.filteredStations,
+                            provider.selectedFuelType,
                           );
-                        },
-                        child: _PriceMarker(
-                          price: station.getPrice(provider.selectedFuelType),
-                          category: priceCategory,
-                          isSelected: _selectedStation?.id == station.id,
+                      return (station: station, category: priceCategory);
+                    }).toList();
+
+                    // Sort: high (red) first, then medium, then low (green) last (on top)
+                    stationsWithCategory.sort((a, b) {
+                      const order = {
+                        PriceCategory.high: 0,
+                        PriceCategory.unknown: 1,
+                        PriceCategory.medium: 2,
+                        PriceCategory.low: 3,
+                      };
+                      return order[a.category]!.compareTo(order[b.category]!);
+                    });
+
+                    return stationsWithCategory.map((item) {
+                      return Marker(
+                        point: LatLng(
+                          item.station.latitude,
+                          item.station.longitude,
                         ),
-                      ),
-                    );
-                  }).toList(),
+                        width: 60,
+                        height: 36,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedStation = item.station);
+                            _mapController.move(
+                              LatLng(
+                                item.station.latitude,
+                                item.station.longitude,
+                              ),
+                              _mapController.camera.zoom,
+                            );
+                          },
+                          child: _PriceMarker(
+                            price: item.station.getPrice(
+                              provider.selectedFuelType,
+                            ),
+                            category: item.category,
+                            isSelected: _selectedStation?.id == item.station.id,
+                          ),
+                        ),
+                      );
+                    }).toList();
+                  }(),
                 ),
               ],
             ),
@@ -135,13 +179,7 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                   right: 16,
                   bottom: 12,
                 ),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.surface, AppColors.surface.withAlpha(0)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
+                decoration: BoxDecoration(color: AppColors.surface),
                 child: Row(
                   children: [
                     Container(
@@ -162,9 +200,10 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
+                          Icon(
                             provider.selectedFuelType.icon,
-                            style: const TextStyle(fontSize: 16),
+                            size: 16,
+                            color: AppColors.text,
                           ),
                           const SizedBox(width: 6),
                           Text(
