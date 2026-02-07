@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GASOFA - App de Precios de Gasolina</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="script.js" defer></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <div class="blob-cont">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar glass">
+        <div class="container nav-container">
+            <a href="#" class="logo">
+                <span class="logo-icon">🛢️</span> GASOFA
+            </a>
+            <div class="nav-links">
+                <a href="#features">Características</a>
+                <a href="#about">Cómo funciona</a>
+                <a href="#download" class="btn btn-primary">Descargar</a>
+            </div>
+            <button class="mobile-menu-btn" aria-label="Menu">
+                <i data-lucide="menu"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="container hero-container">
+            <div class="hero-content fade-up">
+                <div class="badge">Nuevo en España 🇪🇸</div>
+                <h1 class="gradient-text">Ahorra en cada depósito</h1>
+                <p>Encuentra las gasolineras más baratas cerca de ti en tiempo real. Compara precios, filtra por
+                    combustible y navega fácilmente.</p>
+                <div class="hero-btns">
+                    <a href="#download" class="btn btn-primary btn-lg">
+                        <i data-lucide="download"></i> Descargar App
+                    </a>
+                    <a href="#features" class="btn btn-outline btn-lg">
+                        <i data-lucide="info"></i> Saber más
+                    </a>
+                </div>
+                <div class="stats glass-card">
+                    <div class="stat-item">
+                        <span class="stat-number">100%</span>
+                        <span class="stat-label">Tiempo Real</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-number">Digital</span>
+                        <span class="stat-label">Datos Oficiales</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-number">Gratis</span>
+                        <span class="stat-label">Para siempre</span>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-image fade-in-right">
+                <!-- CSS Phone Mockup -->
+                <div class="phone-mockup">
+                    <div class="phone-screen">
+                        <div class="app-header">
+                            <i data-lucide="menu" size="20"></i>
+                            <span>GASOFA</span>
+                            <i data-lucide="user" size="20"></i>
+                        </div>
+                        <div class="app-map-placeholder">
+                            <div class="map-pin pin-cheap">1.54€</div>
+                            <div class="map-pin pin-avg" style="top: 30%; left: 70%">1.62€</div>
+                            <div class="map-pin pin-exp" style="top: 60%; left: 20%">1.75€</div>
+                        </div>
+                        <div class="app-card">
+                            <div class="card-row">
+                                <div class="station-icon">⛽</div>
+                                <div>
+                                    <div class="station-name">Gasolinera LowCost</div>
+                                    <div class="station-dist">0.5 km • Abierto ahora</div>
+                                </div>
+                                <div class="station-price">1.549 €</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="phone-notch"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-header fade-up">
+                <h2>Todo lo que necesitas para ahorrar</h2>
+                <p class="subtitle">Funcionalidades diseñadas para que encuentres el mejor precio sin esfuerzo.</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card glass fade-up" style="--delay: 100ms">
+                    <div class="icon-box bg-blue">
+                        <i data-lucide="zap"></i>
+                    </div>
+                    <h3>Precios en Tiempo Real</h3>
+                    <p>Datos actualizados directamente de fuentes oficiales. Sin retrasos.</p>
+                </div>
+
+                <div class="feature-card glass fade-up" style="--delay: 200ms">
+                    <div class="icon-box bg-green">
+                        <i data-lucide="map"></i>
+                    </div>
+                    <h3>Mapa Interactivo</h3>
+                    <p>Visualiza precios con códigos de colores: verde (barato), amarillo (medio) y rojo (caro).</p>
+                </div>
+
+                <div class="feature-card glass fade-up" style="--delay: 300ms">
+                    <div class="icon-box bg-orange">
+                        <i data-lucide="sliders"></i>
+                    </div>
+                    <h3>Filtros Inteligentes</h3>
+                    <p>Filtra por tipo de combustible (Gasolina 95, Diesel, GLP...) y ordena por precio o distancia.</p>
+                </div>
+
+                <div class="feature-card glass fade-up" style="--delay: 400ms">
+                    <div class="icon-box bg-purple">
+                        <i data-lucide="navigation"></i>
+                    </div>
+                    <h3>Navegación Directa</h3>
+                    <p>Inicia rutas a la gasolinera elegida directamente con Google Maps con un solo toque.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- App Showcase / "How it works" essentially -->
+    <section id="about" class="pixel-perfect">
+        <div class="container showcase-container">
+            <div class="showcase-content fade-up">
+                <h2>Diseño limpio y moderno</h2>
+                <p>Olvídate de listas complicadas. Gasofa te presenta la información de manera clara, con un diseño
+                    minimalista que prioriza lo importante: el precio.</p>
+                <ul class="check-list">
+                    <li><i data-lucide="check-circle"></i> Ordena por precio, distancia o combinado.</li>
+                    <li><i data-lucide="check-circle"></i> Modo oscuro automático.</li>
+                    <li><i data-lucide="check-circle"></i> Información detallada de horarios.</li>
+                </ul>
+            </div>
+            <div class="showcase-image fade-in-left">
+                <!-- Another styling element or image -->
+                <div class="floating-cards">
+                    <div class="float-card glass card-1">
+                        <div class="fc-header">
+                            <span>Diesel A</span>
+                            <span class="badge-price badge-green">Barato</span>
+                        </div>
+                        <div class="fc-price">1.459 €/L</div>
+                    </div>
+                    <div class="float-card glass card-2">
+                        <div class="fc-header">
+                            <span>Gasolina 95</span>
+                            <span class="badge-price badge-red">Caro</span>
+                        </div>
+                        <div class="fc-price">1.829 €</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section id="download" class="cta-section">
+        <div class="container">
+            <div class="cta-box glass fade-up">
+                <h2>¿Listo para ahorrar?</h2>
+                <p>Descarga Gasofa y empieza a pagar menos por el mismo combustible.</p>
+                <div class="store-buttons">
+                    <button class="btn btn-store">
+                        <i data-lucide="play-circle"></i> Google Play
+                    </button>
+                    <!-- <button class="btn btn-store">
+                        <i data-lucide="apple"></i> App Store
+                    </button> -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container footer-content">
+            <div class="footer-logo">
+                <span>🛢️ GASOFA</span>
+            </div>
+            <div class="footer-links">
+                <a href="terms.html">Términos de Servicio</a>
+                <a href="privacy.html">Política de Privacidad</a>
+                <a href="mailto:contacto@gasofa.app">Contacto</a>
+            </div>
+        </div>
+        <div class="copyright">
+            &copy; 2026 Gasofa. Hecho con ❤️ para conductores.
+        </div>
+    </footer>
+
+    <script>
+        // Init Icons
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

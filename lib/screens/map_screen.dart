@@ -237,7 +237,8 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                     ),
                     const Spacer(),
                     if (provider.loadingState == LoadingState.loading ||
-                        provider.loadingState == LoadingState.syncing)
+                        provider.loadingState == LoadingState.syncing ||
+                        provider.processingStatus != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -264,17 +265,21 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                                 color: AppColors.primary,
                               ),
                             ),
-                            if (provider.syncStatus != null) ...[
-                              const SizedBox(width: 8),
-                              Text(
-                                provider.syncStatus!,
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                provider.processingStatus ??
+                                    provider.syncStatus ??
+                                    'Cargando...',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: AppColors.textSecondary,
                                   fontWeight: FontWeight.w500,
                                 ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
-                            ],
+                            ),
                           ],
                         ),
                       ),
