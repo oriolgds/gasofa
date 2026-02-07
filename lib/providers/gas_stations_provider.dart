@@ -1,7 +1,10 @@
 /// Main state management provider for gas stations
 /// Now uses Isar database for caching and incremental updates
+/// Optimized with Isolate-based sorting and pre-calculated price thresholds
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/fuel_type.dart';
 import '../models/gas_station.dart';
@@ -21,7 +24,10 @@ class GasStationsProvider extends ChangeNotifier {
   final LocationService _locationService = LocationService();
   final DistanceService _distanceService = DistanceService();
   final DatabaseService _databaseService = DatabaseService();
+
   final ProvinceLookupService _provinceLookupService = ProvinceLookupService();
+
+  static const String _prefsKeyFuelType = 'selected_fuel_type';
 
   // State
   List<GasStation> _stations = [];
@@ -30,15 +36,22 @@ class GasStationsProvider extends ChangeNotifier {
   String? _syncStatus;
   FuelType _selectedFuelType = FuelType.gasolina95;
   String? _selectedProvinceCode;
-  SortMode _sortMode = SortMode.price;
+  SortMode _sortMode = SortMode.combined;
   Position? _userPosition;
   bool _useLocation = false;
   String _searchQuery = '';
   Set<String> _loadedProvinceCodes = {}; // Track which provinces we've loaded
 
-  // Pre-calculated sorted lists per fuel type
-  Map<FuelType, List<GasStation>> _sortedStationsCache = {};
+  // Caching and Optimization
+  Map<FuelType, List<GasStation>> _sortedStationsCache =
+      {}; // Cache for Price sort
   String? _processingStatus;
+  Timer? _searchDebounce;
+
+  // Pre-calculated thresholds for the current filtered/sorted list
+  // ensuring O(1) checks in list rendering instead of O(N)
+  double? _lowPriceThreshold;
+  double? _highPriceThreshold;
 
   // Getters
   List<GasStation> get stations => _stations;
@@ -54,6 +67,10 @@ class GasStationsProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   String? get processingStatus => _processingStatus;
 
+  // Public thresholds
+  double? get lowPriceThreshold => _lowPriceThreshold;
+  double? get highPriceThreshold => _highPriceThreshold;
+
   GasStationsProvider() {
     // Initial fetch from DB
     _loadFromDatabase();
@@ -62,35 +79,60 @@ class GasStationsProvider extends ChangeNotifier {
   /// Get filtered stations (only those with selected fuel type price and matching search)
   /// Uses pre-calculated cache when sorting by price for instant switching
   List<GasStation> get filteredStations {
-    // Only use cache when sorting by price
-    // For distance/combined sorting, use the sorted _stations list
-    final sourceList =
-        (_sortMode == SortMode.price &&
-            _sortedStationsCache.containsKey(_selectedFuelType))
-        ? _sortedStationsCache[_selectedFuelType]!
-        : _stations;
+    // 1. Select source list
+    List<GasStation> sourceList;
+
+    // If sorting by Price, use the cache if available
+    if (_sortMode == SortMode.price &&
+        _sortedStationsCache.containsKey(_selectedFuelType)) {
+      sourceList = _sortedStationsCache[_selectedFuelType]!;
+    } else {
+      // Otherwise use the main list (which is sorted by current mode)
+      sourceList = _stations;
+    }
+
+    // 2. Filter by search query and price availability
+    // Optimization: If no search query, return list directly (assuming all have price? No, still need to check)
+    // Actually, we should filter out zero-prices or nulls for the selected fuel type
 
     return sourceList.where((s) {
       if (!s.hasPrice(_selectedFuelType)) return false;
+
       if (_searchQuery.isEmpty) return true;
       return s.name.toLowerCase().contains(_searchQuery.toLowerCase());
     }).toList();
   }
 
-  /// Set search query for filtering by name
+  /// Set search query with debounce
   void setSearchQuery(String query) {
-    _searchQuery = query;
-    notifyListeners();
+    if (_searchQuery == query) return;
+
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      _searchQuery = query;
+      notifyListeners();
+    });
   }
 
   /// Set fuel type filter
   Future<void> setFuelType(FuelType fuelType) async {
+    if (_selectedFuelType == fuelType) return;
+
     _selectedFuelType = fuelType;
-    // Notify immediately so UI responds
+
+    // Save to preferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKeyFuelType, fuelType.name);
+
+    // Recalculate thresholds for the new fuel type immediately
+    _calculatePriceThresholds();
+
     notifyListeners();
-    // Sort asynchronously to avoid blocking UI
-    await _sortStationsAsync();
-    notifyListeners();
+
+    // If not sorting by price, we might need to re-sort
+    if (_sortMode != SortMode.price) {
+      await _sortStationsAsync();
+    }
   }
 
   /// Set province filter
@@ -101,12 +143,13 @@ class GasStationsProvider extends ChangeNotifier {
 
   /// Set sort mode
   Future<void> setSortMode(SortMode mode) async {
+    if (_sortMode == mode) return;
+
     _sortMode = mode;
-    // Notify immediately so UI responds
-    notifyListeners();
-    // Sort asynchronously to avoid blocking UI
+    notifyListeners(); // Notify to update UI selection state
+
+    // Sort asynchronously
     await _sortStationsAsync();
-    notifyListeners();
   }
 
   /// Toggle use of user location
@@ -129,9 +172,23 @@ class GasStationsProvider extends ChangeNotifier {
   /// Load stations from local DB
   Future<void> _loadFromDatabase() async {
     _loadingState = LoadingState.loading;
+
     notifyListeners();
 
     try {
+      // Load preferences first
+      final prefs = await SharedPreferences.getInstance();
+      final savedFuelType = prefs.getString(_prefsKeyFuelType);
+      if (savedFuelType != null) {
+        // Find matching enum value
+        try {
+          _selectedFuelType = FuelType.values.firstWhere(
+            (e) => e.name == savedFuelType,
+            orElse: () => FuelType.gasolina95,
+          );
+        } catch (_) {}
+      }
+
       final entities = await _databaseService.getAllStations();
       _stations = entities.map((e) => e.toGasStation()).toList();
 
@@ -143,10 +200,14 @@ class GasStationsProvider extends ChangeNotifier {
             _userPosition!.longitude,
           );
         }
-        _sortStations();
+
+        // Initial sort and calculations
+        await _precalculateSortedLists(); // Pre-calc price lists
+        await _sortStationsAsync(); // Sort main list
+        _calculatePriceThresholds(); // Calc thresholds
+
         _loadingState = LoadingState.loaded;
       } else {
-        // If empty, user needs to enable location and load data
         _loadingState = LoadingState.idle;
       }
     } catch (e) {
@@ -158,8 +219,6 @@ class GasStationsProvider extends ChangeNotifier {
 
   /// Fetch stations - only load current province and nearby provinces for performance
   Future<void> fetchStations() async {
-    // If we already have data, we just sync in background
-    // If we have no data, we show loading
     if (_stations.isEmpty) {
       _loadingState = LoadingState.loading;
     } else {
@@ -169,12 +228,10 @@ class GasStationsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Get user location if enabled
       if (_useLocation && _userPosition == null) {
         await fetchUserLocation();
       }
 
-      // We need user location to determine which provinces to load
       if (_userPosition == null) {
         _errorMessage = 'Ubicación necesaria para cargar gasolineras cercanas';
         _loadingState = LoadingState.error;
@@ -182,13 +239,11 @@ class GasStationsProvider extends ChangeNotifier {
         return;
       }
 
-      // Step 1: Fetch all provinces list
       _syncStatus = 'Obteniendo provincias cercanas...';
       notifyListeners();
 
       final allProvinces = await _apiService.fetchProvinces();
 
-      // Step 2: Determine which provinces to load (only current + nearby)
       final currentProvinceCode = _provinceLookupService
           .getProvinceCodeFromCoordinates(
             _userPosition!.latitude,
@@ -203,21 +258,18 @@ class GasStationsProvider extends ChangeNotifier {
         return;
       }
 
-      // Build list of provinces to load: current + nearby only
       List<String> provincesToLoad = [currentProvinceCode];
       final nearbyProvinceCodes = _provinceLookupService.getNearbyProvinceCodes(
         currentProvinceCode,
       );
       provincesToLoad.addAll(nearbyProvinceCodes);
 
-      // Step 3: Load only these provinces
       int total = provincesToLoad.length;
       int current = 0;
 
       for (final provinceCode in provincesToLoad) {
         current++;
 
-        // Find province name for display
         final provinceName = allProvinces
             .firstWhere(
               (p) => p.id == provinceCode,
@@ -242,10 +294,8 @@ class GasStationsProvider extends ChangeNotifier {
               .toList();
           await _databaseService.saveStations(entities);
 
-          // Track that we've loaded this province
           _loadedProvinceCodes.add(provinceCode);
 
-          // Refresh UI after each province for immediate feedback
           final allEntities = await _databaseService.getAllStations();
           _stations = allEntities.map((e) => e.toGasStation()).toList();
 
@@ -256,24 +306,28 @@ class GasStationsProvider extends ChangeNotifier {
               _userPosition!.longitude,
             );
           }
-          _sortStations();
+
+          // Re-sort and re-calculate occasionally or at end?
+          // Doing it here gives immediate feedback but might be jerky if not backgrounded.
+          // Since we use background isolate now, it should be fine.
+
+          await _sortStationsAsync();
+          _calculatePriceThresholds();
+
           notifyListeners();
         } catch (e) {
           print('Error loading province $provinceName: $e');
-          // Continue with next province
         }
-
-        // Yield to UI thread to prevent freezing
-        await Future.delayed(Duration.zero);
       }
 
       _syncStatus = null;
       _loadingState = LoadingState.loaded;
       notifyListeners();
 
-      // Pre-calculate sorted lists for all fuel types in background
+      // Final full pre-calculation
       await _precalculateSortedLists();
     } catch (e) {
+      print('Fetch error: $e');
       _errorMessage = e.toString();
       _loadingState = LoadingState.error;
       _syncStatus = null;
@@ -282,192 +336,176 @@ class GasStationsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pre-calculate sorted lists for all fuel types in background
-  /// This runs after initial data load and allows instant fuel type switching
+  /// Pre-calculate sorted lists for all fuel types in background Isolate
   Future<void> _precalculateSortedLists() async {
-    for (final fuelType in FuelType.values) {
-      _processingStatus = 'Ordenando ${fuelType.displayName}...';
-      notifyListeners();
+    _processingStatus = 'Optimizando listas...';
+    notifyListeners();
 
-      // Create sorted copy for this fuel type
-      final sortedList = List<GasStation>.from(_stations);
-      sortedList.sort((a, b) {
-        final priceA = a.getPrice(fuelType) ?? double.infinity;
-        final priceB = b.getPrice(fuelType) ?? double.infinity;
-        return priceA.compareTo(priceB);
-      });
+    try {
+      // We process all fuel types in one go or separate tasks?
+      // One go is better to avoid overhead.
+      // But we can just use the generic sort for each.
 
-      _sortedStationsCache[fuelType] = sortedList;
-
-      // Yield to UI thread to keep app responsive
-      await Future.delayed(Duration.zero);
+      for (final fuelType in FuelType.values) {
+        final sorted = await compute(_sortStationsWorker, {
+          'stations': _stations,
+          'mode': SortMode.price, // Always cache Price sort
+          'fuelType': fuelType,
+        });
+        _sortedStationsCache[fuelType] = sorted;
+      }
+    } catch (e) {
+      print('Error accessing isolate: $e');
     }
 
     _processingStatus = null;
     notifyListeners();
   }
 
-  /// Sort stations based on current sort mode (synchronous - used during initial load)
-  void _sortStations() {
-    switch (_sortMode) {
-      case SortMode.price:
-        _stations.sort((a, b) {
-          final priceA = a.getPrice(_selectedFuelType) ?? double.infinity;
-          final priceB = b.getPrice(_selectedFuelType) ?? double.infinity;
-          return priceA.compareTo(priceB);
-        });
-        break;
-      case SortMode.distance:
-        _distanceService.sortByDistance(_stations);
-        break;
-      case SortMode.combined:
-        _sortByCombined();
-        break;
-    }
-  }
-
-  /// Sort stations asynchronously to keep UI responsive
+  /// Sort stations asynchronously using Isolate
   Future<void> _sortStationsAsync() async {
-    // Yield to UI thread before sorting
-    await Future.delayed(Duration.zero);
+    _processingStatus = 'Ordenando...';
+    notifyListeners();
 
-    switch (_sortMode) {
+    try {
+      // Use compute to run in background isolate
+      final sorted = await compute(_sortStationsWorker, {
+        'stations': _stations,
+        'mode': _sortMode,
+        'fuelType': _selectedFuelType,
+      });
+
+      _stations = sorted;
+
+      // Update thresholds based on new list/fuel type
+      _calculatePriceThresholds();
+    } catch (e) {
+      print('Sort error: $e');
+    }
+
+    _processingStatus = null;
+    notifyListeners();
+  }
+
+  /// Static worker function for Isolate
+  static List<GasStation> _sortStationsWorker(Map<String, dynamic> args) {
+    final List<GasStation> stations = List<GasStation>.from(args['stations']);
+    final SortMode mode = args['mode'];
+    final FuelType fuelType = args['fuelType'];
+
+    switch (mode) {
       case SortMode.price:
-        _stations.sort((a, b) {
-          final priceA = a.getPrice(_selectedFuelType) ?? double.infinity;
-          final priceB = b.getPrice(_selectedFuelType) ?? double.infinity;
+        stations.sort((a, b) {
+          final priceA = a.getPrice(fuelType) ?? double.infinity;
+          final priceB = b.getPrice(fuelType) ?? double.infinity;
           return priceA.compareTo(priceB);
         });
         break;
+
       case SortMode.distance:
-        _distanceService.sortByDistance(_stations);
+        // Assume distanceKm is already calculated on the objects
+        stations.sort((a, b) {
+          final distA = a.distanceKm ?? double.infinity;
+          final distB = b.distanceKm ?? double.infinity;
+          return distA.compareTo(distB);
+        });
         break;
+
       case SortMode.combined:
-        await _sortByCombinedAsync();
-        return; // Already yielded in _sortByCombinedAsync
+        // Combined logic inside isolate
+        if (stations.isEmpty) return stations;
+
+        final prices = stations
+            .map((s) => s.getPrice(fuelType))
+            .whereType<double>()
+            .toList();
+        final distances = stations
+            .map((s) => s.distanceKm)
+            .whereType<double>()
+            .toList();
+
+        if (prices.isEmpty || distances.isEmpty) {
+          // Fallback to price sort
+          stations.sort((a, b) {
+            final priceA = a.getPrice(fuelType) ?? double.infinity;
+            final priceB = b.getPrice(fuelType) ?? double.infinity;
+            return priceA.compareTo(priceB);
+          });
+          return stations;
+        }
+
+        final maxPrice = prices.reduce((a, b) => a > b ? a : b);
+        final minPrice = prices.reduce((a, b) => a < b ? a : b);
+        // We use a fixed reference distance (e.g. 50km) to ensure local differences
+        // are significant and not compressed by far-away outliers.
+        const referenceMaxDistance = 50.0;
+        final maxDistFallback = distances.reduce((a, b) => a > b ? a : b);
+
+        // Prioritize distance more heavily
+        const priceWeight = 0.35;
+        const distanceWeight = 0.65;
+
+        stations.sort((a, b) {
+          final priceA = a.getPrice(fuelType) ?? maxPrice;
+          final priceB = b.getPrice(fuelType) ?? maxPrice;
+          final distA = a.distanceKm ?? maxDistFallback;
+          final distB = b.distanceKm ?? maxDistFallback;
+
+          final normPriceA =
+              (priceA - minPrice) / (maxPrice - minPrice + 0.001);
+          final normPriceB =
+              (priceB - minPrice) / (maxPrice - minPrice + 0.001);
+
+          // Normalize distance relative to reference (can be > 1.0)
+          final normDistA = distA / referenceMaxDistance;
+          final normDistB = distB / referenceMaxDistance;
+
+          final scoreA =
+              (normPriceA * priceWeight) + (normDistA * distanceWeight);
+          final scoreB =
+              (normPriceB * priceWeight) + (normDistB * distanceWeight);
+
+          return scoreA.compareTo(scoreB);
+        });
+        break;
     }
 
-    // Yield again after sorting
-    await Future.delayed(Duration.zero);
+    return stations;
   }
 
-  /// Combined sort: balance between price and distance (synchronous)
-  void _sortByCombined() {
-    if (_stations.isEmpty) return;
+  /// Calculate price thresholds for the current station list and fuel type
+  /// This is O(N) but only runs once when data/filter changes, not per item
+  void _calculatePriceThresholds() {
+    if (_stations.isEmpty) {
+      _lowPriceThreshold = null;
+      _highPriceThreshold = null;
+      return;
+    }
 
-    // Get max values for normalization
     final prices = _stations
         .map((s) => s.getPrice(_selectedFuelType))
         .whereType<double>()
         .toList();
-    final distances = _stations
-        .map((s) => s.distanceKm)
-        .whereType<double>()
-        .toList();
 
-    if (prices.isEmpty || distances.isEmpty) {
-      _sortStations();
+    if (prices.isEmpty) {
+      _lowPriceThreshold = null;
+      _highPriceThreshold = null;
       return;
     }
-
-    final maxPrice = prices.reduce((a, b) => a > b ? a : b);
-    final minPrice = prices.reduce((a, b) => a < b ? a : b);
-    final maxDistance = distances.reduce((a, b) => a > b ? a : b);
-
-    const priceWeight = 0.6;
-    const distanceWeight = 0.4;
-
-    _stations.sort((a, b) {
-      final priceA = a.getPrice(_selectedFuelType) ?? maxPrice;
-      final priceB = b.getPrice(_selectedFuelType) ?? maxPrice;
-      final distA = a.distanceKm ?? maxDistance;
-      final distB = b.distanceKm ?? maxDistance;
-
-      // Normalize values 0-1
-      final normPriceA = (priceA - minPrice) / (maxPrice - minPrice + 0.001);
-      final normPriceB = (priceB - minPrice) / (maxPrice - minPrice + 0.001);
-      final normDistA = distA / (maxDistance + 0.001);
-      final normDistB = distB / (maxDistance + 0.001);
-
-      final scoreA = (normPriceA * priceWeight) + (normDistA * distanceWeight);
-      final scoreB = (normPriceB * priceWeight) + (normDistB * distanceWeight);
-
-      return scoreA.compareTo(scoreB);
-    });
-  }
-
-  /// Combined sort: balance between price and distance (async version)
-  Future<void> _sortByCombinedAsync() async {
-    if (_stations.isEmpty) return;
-
-    // Yield to UI thread
-    await Future.delayed(Duration.zero);
-
-    // Get max values for normalization
-    final prices = _stations
-        .map((s) => s.getPrice(_selectedFuelType))
-        .whereType<double>()
-        .toList();
-    final distances = _stations
-        .map((s) => s.distanceKm)
-        .whereType<double>()
-        .toList();
-
-    if (prices.isEmpty || distances.isEmpty) {
-      _sortStations();
-      return;
-    }
-
-    final maxPrice = prices.reduce((a, b) => a > b ? a : b);
-    final minPrice = prices.reduce((a, b) => a < b ? a : b);
-    final maxDistance = distances.reduce((a, b) => a > b ? a : b);
-
-    const priceWeight = 0.6;
-    const distanceWeight = 0.4;
-
-    _stations.sort((a, b) {
-      final priceA = a.getPrice(_selectedFuelType) ?? maxPrice;
-      final priceB = b.getPrice(_selectedFuelType) ?? maxPrice;
-      final distA = a.distanceKm ?? maxDistance;
-      final distB = b.distanceKm ?? maxDistance;
-
-      // Normalize values 0-1
-      final normPriceA = (priceA - minPrice) / (maxPrice - minPrice + 0.001);
-      final normPriceB = (priceB - minPrice) / (maxPrice - minPrice + 0.001);
-      final normDistA = distA / (maxDistance + 0.001);
-      final normDistB = distB / (maxDistance + 0.001);
-
-      final scoreA = (normPriceA * priceWeight) + (normDistA * distanceWeight);
-      final scoreB = (normPriceB * priceWeight) + (normDistB * distanceWeight);
-
-      return scoreA.compareTo(scoreB);
-    });
-
-    // Yield after sorting
-    await Future.delayed(Duration.zero);
-  }
-
-  /// Get price category for coloring
-  static PriceCategory getPriceCategory(
-    double? price,
-    List<GasStation> stations,
-    FuelType fuelType,
-  ) {
-    if (price == null) return PriceCategory.unknown;
-
-    final prices = stations
-        .map((s) => s.getPrice(fuelType))
-        .whereType<double>()
-        .toList();
-
-    if (prices.isEmpty) return PriceCategory.medium;
 
     prices.sort();
-    final lowThreshold = prices[(prices.length * 0.33).floor()];
-    final highThreshold = prices[(prices.length * 0.66).floor()];
+    _lowPriceThreshold = prices[(prices.length * 0.33).floor()];
+    _highPriceThreshold = prices[(prices.length * 0.66).floor()];
+  }
 
-    if (price <= lowThreshold) return PriceCategory.low;
-    if (price >= highThreshold) return PriceCategory.high;
+  /// Get price category using pre-calculated thresholds (O(1))
+  PriceCategory getCategoryForPrice(double? price) {
+    if (price == null) return PriceCategory.unknown;
+    if (_lowPriceThreshold == null || _highPriceThreshold == null)
+      return PriceCategory.medium;
+
+    if (price <= _lowPriceThreshold!) return PriceCategory.low;
+    if (price >= _highPriceThreshold!) return PriceCategory.high;
     return PriceCategory.medium;
   }
 }

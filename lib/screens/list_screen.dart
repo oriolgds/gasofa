@@ -372,11 +372,8 @@ class ListScreenRedesigned extends StatelessWidget {
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         final station = stations[index];
-        final priceCategory = GasStationsProvider.getPriceCategory(
-          station.getPrice(provider.selectedFuelType),
-          stations,
-          provider.selectedFuelType,
-        );
+        final price = station.getPrice(provider.selectedFuelType);
+        final priceCategory = provider.getCategoryForPrice(price);
 
         return _StationCard(
           station: station,

@@ -119,24 +119,18 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                     // If zoom < 10, show only cheap (green) stations
                     if (_currentZoom < 10.0) {
                       stations = stations.where((s) {
-                        final priceCategory =
-                            GasStationsProvider.getPriceCategory(
-                              s.getPrice(provider.selectedFuelType),
-                              provider.filteredStations,
-                              provider.selectedFuelType,
-                            );
+                        final priceCategory = provider.getCategoryForPrice(
+                          s.getPrice(provider.selectedFuelType),
+                        );
                         return priceCategory == PriceCategory.low;
                       }).toList();
                     }
 
                     // Add price category to each station for sorting
                     final stationsWithCategory = stations.map((station) {
-                      final priceCategory =
-                          GasStationsProvider.getPriceCategory(
-                            station.getPrice(provider.selectedFuelType),
-                            provider.filteredStations,
-                            provider.selectedFuelType,
-                          );
+                      final priceCategory = provider.getCategoryForPrice(
+                        station.getPrice(provider.selectedFuelType),
+                      );
                       return (station: station, category: priceCategory);
                     }).toList();
 
@@ -414,23 +408,14 @@ class _StationSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final price = station.getPrice(provider.selectedFuelType);
-    final priceCategory = GasStationsProvider.getPriceCategory(
-      price,
-      provider.filteredStations,
-      provider.selectedFuelType,
-    );
+    final priceCategory = provider.getCategoryForPrice(price);
 
-    Color priceColor;
-    switch (priceCategory) {
-      case PriceCategory.low:
-        priceColor = AppColors.priceGood;
-      case PriceCategory.medium:
-        priceColor = AppColors.priceMedium;
-      case PriceCategory.high:
-        priceColor = AppColors.priceHigh;
-      case PriceCategory.unknown:
-        priceColor = AppColors.textLight;
-    }
+    final Color priceColor = switch (priceCategory) {
+      PriceCategory.low => AppColors.priceGood,
+      PriceCategory.medium => AppColors.priceMedium,
+      PriceCategory.high => AppColors.priceHigh,
+      PriceCategory.unknown => AppColors.textLight,
+    };
 
     return Container(
       padding: const EdgeInsets.all(20),
