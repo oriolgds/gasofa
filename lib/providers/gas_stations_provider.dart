@@ -453,15 +453,15 @@ class GasStationsProvider extends ChangeNotifier {
     // We'll trust exact match for now, or use loose match.
     // API returns Uppercase usually.
 
-    _listStations = _stations.where((s) {
+    final filtered = _stations.where((s) {
       if (_listVisibleProvinceNames.contains(s.province)) return true;
       // Backup check: Case insensitive
       // Optimization: likely strict match works if data sources are consistent.
       return false;
     }).toList();
 
-    // Sort this specific list
-    await _sortListStationsAsync();
+    // Sort this specific list and update _listStations atomically
+    await _sortListStationsAsync(stationsToProcess: filtered);
 
     // Save state
     _saveListState();
@@ -518,15 +518,21 @@ class GasStationsProvider extends ChangeNotifier {
   }
 
   /// Sort the LIST stations asynchronously using Isolate
-  Future<void> _sortListStationsAsync() async {
+  /// [stationsToProcess]: Optional list to sort. If null, uses current [_listStations].
+  Future<void> _sortListStationsAsync({
+    List<GasStation>? stationsToProcess,
+  }) async {
     _processingStatus = 'Ordenando...';
     notifyListeners();
 
+    // Use provided list or current list
+    final listToSort = stationsToProcess ?? _listStations;
+
     try {
       // Use compute to run in background isolate
-      // We pass _listStations (snapshot) to sort.
+      // We pass listToSort (snapshot) to sort.
       final sorted = await compute(_sortStationsWorker, {
-        'stations': _listStations,
+        'stations': listToSort,
         'mode': _sortMode,
         'fuelType': _selectedFuelType,
       });
