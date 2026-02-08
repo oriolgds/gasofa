@@ -7,6 +7,7 @@ import '../models/fuel_type.dart';
 import '../models/gas_station.dart';
 import '../providers/gas_stations_provider.dart';
 import 'station_detail_screen.dart';
+import 'about_screen.dart';
 
 class ListScreenRedesigned extends StatelessWidget {
   const ListScreenRedesigned({super.key});
@@ -158,6 +159,29 @@ class ListScreenRedesigned extends StatelessWidget {
                       }
                       return const SizedBox.shrink();
                     },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AboutScreen(),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.info_outline_rounded,
+                    size: 20,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ),

@@ -10,6 +10,7 @@ import '../config/constants.dart';
 import '../models/fuel_type.dart';
 import '../models/gas_station.dart';
 import '../providers/gas_stations_provider.dart';
+import 'about_screen.dart';
 
 class MapScreenRedesigned extends StatefulWidget {
   const MapScreenRedesigned({super.key});
@@ -250,17 +251,21 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                       ),
                     ),
                     const Spacer(),
-                    if (provider.loadingState == LoadingState.loading ||
-                        provider.loadingState == LoadingState.syncing ||
-                        provider.processingStatus != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
+                    // Info Button
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AboutScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(20),
+                          shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withAlpha(13),
@@ -268,39 +273,72 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                             ),
                           ],
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                provider.processingStatus ??
-                                    provider.syncStatus ??
-                                    'Cargando...',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                              ),
-                            ),
-                          ],
+                        child: Icon(
+                          Icons.info_outline_rounded,
+                          color: AppColors.text,
+                          size: 22,
                         ),
                       ),
+                    ),
                   ],
                 ),
               ),
             ),
+
+            // Loading Indicator (Moved below Info Button)
+            if (provider.loadingState == LoadingState.loading ||
+                provider.loadingState == LoadingState.syncing ||
+                provider.processingStatus != null)
+              Positioned(
+                top:
+                    MediaQuery.of(context).padding.top +
+                    60, // Below info button
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(13),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          provider.processingStatus ??
+                              provider.syncStatus ??
+                              'Cargando...',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             // Re-center button
             if (provider.userPosition != null)
