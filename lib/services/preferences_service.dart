@@ -1,4 +1,5 @@
 /// Preferences service for first-launch detection and settings
+library;
 
 import 'package:shared_preferences/shared_preferences.dart';
 

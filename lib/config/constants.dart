@@ -1,4 +1,5 @@
 /// App-wide constants for GASOFA - Pastel Theme
+library;
 
 import 'dart:ui';
 

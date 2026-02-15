@@ -1,4 +1,5 @@
 /// Province model for dropdown selection
+library;
 
 class Province {
   final String code;

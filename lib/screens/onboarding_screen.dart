@@ -1,4 +1,5 @@
 /// Onboarding screen for first launch with location permission
+library;
 
 import 'package:flutter/material.dart';
 import '../config/constants.dart';
