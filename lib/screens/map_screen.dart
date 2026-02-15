@@ -66,6 +66,14 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
               options: MapOptions(
                 initialCenter: LatLng(centerLat, centerLng),
                 initialZoom: zoom,
+                onMapReady: () {
+                  if (mounted) {
+                    setState(() {
+                      _currentBounds = _mapController.camera.visibleBounds;
+                      _currentZoom = _mapController.camera.zoom;
+                    });
+                  }
+                },
                 onTap: (_, _) => setState(() => _selectedStation = null),
                 onPositionChanged: (position, hasGesture) {
                   // Debounce map updates to prevent lag
