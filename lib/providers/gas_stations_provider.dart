@@ -4,6 +4,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -676,32 +677,24 @@ class GasStationsProvider extends ChangeNotifier {
       return visibleStations;
     }
 
-    // 4. Grid clustering based on zoom
-    // Lower zoom = larger grid cells = fewer stations
-    // Grid size in degrees approx.
-    double gridSize;
-    int maxPerCell;
+    // 4. Grid clustering based on continuous zoom formula
+    // Smoother experience and prevents oversaturation
+
+    // Grid Size Formula: 240.0 / 2^zoom
+    // Z=6 -> 3.75 (Coarse)
+    // Z=10 -> 0.23 (Province)
+    // Z=14 -> 0.015 (Street)
+    final double gridSize = 240.0 / pow(2, zoom);
+
+    // Max Per Cell Formula: Increases as we zoom in
+    // Z=8 -> 2
+    // Z=11 -> 3
+    // Z=14 -> 4
+    // clamped to at least 1
+    final int maxPerCell = max(1, ((zoom - 5) / 3).floor() + 1);
 
     // Trigger background load for visible provinces
     _scheduleProvinceCheck(bounds);
-
-    if (zoom <= 6) {
-      gridSize = 2.0; // Whole Spain view -> very coarse (approx 200km)
-      maxPerCell = 1;
-    } else if (zoom <= 8) {
-      gridSize = 0.8; // Region view (approx 80km)
-      maxPerCell = 1;
-    } else if (zoom <= 10) {
-      gridSize = 0.25; // Province view (approx 25km)
-      maxPerCell = 1; // Only 1 best station per 25km block
-    } else if (zoom <= 11.5) {
-      gridSize = 0.05; // City approach
-      maxPerCell = 2;
-    } else {
-      // Zoom > 11.5
-      gridSize = 0.01; // City details
-      maxPerCell = 3;
-    }
 
     final Map<String, List<GasStation>> grid = {};
 
