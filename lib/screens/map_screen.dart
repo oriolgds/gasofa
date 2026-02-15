@@ -1,4 +1,5 @@
 /// Redesigned map screen with always-visible stations and price markers
+library;
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -65,7 +66,7 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
               options: MapOptions(
                 initialCenter: LatLng(centerLat, centerLng),
                 initialZoom: zoom,
-                onTap: (_, __) => setState(() => _selectedStation = null),
+                onTap: (_, _) => setState(() => _selectedStation = null),
                 onPositionChanged: (position, hasGesture) {
                   // Debounce map updates to prevent lag
                   if (_debounce?.isActive ?? false) _debounce!.cancel();

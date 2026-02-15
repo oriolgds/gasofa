@@ -1,4 +1,5 @@
 /// Fuel type enum representing different fuel types available at gas stations
+library;
 
 import 'package:flutter/material.dart';
 

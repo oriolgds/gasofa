@@ -1,4 +1,5 @@
 /// Redesigned list screen with full-screen scrolling
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

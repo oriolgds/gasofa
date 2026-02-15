@@ -1,6 +1,7 @@
 /// Main state management provider for gas stations
 /// Now uses Isar database for caching and incremental updates
 /// Optimized with Isolate-based sorting and pre-calculated price thresholds
+library;
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -46,7 +47,8 @@ class GasStationsProvider extends ChangeNotifier {
   Position? _userPosition;
   bool _useLocation = false;
   String _searchQuery = '';
-  Set<String> _loadedProvinceCodes = {}; // Track which provinces we've loaded
+  final Set<String> _loadedProvinceCodes =
+      {}; // Track which provinces we've loaded
   Set<String> _visibleProvinceCodes =
       {}; // Track current + nearby provinces (Live/Temp)
 
@@ -55,7 +57,7 @@ class GasStationsProvider extends ChangeNotifier {
   Set<String> _listVisibleProvinceNames = {};
 
   // Caching and Optimization
-  Map<FuelType, List<GasStation>> _sortedStationsCache =
+  final Map<FuelType, List<GasStation>> _sortedStationsCache =
       {}; // Cache for Global Price sort (optional use)
   String? _processingStatus;
   Timer? _searchDebounce;
@@ -837,8 +839,9 @@ class GasStationsProvider extends ChangeNotifier {
   /// Get price category using pre-calculated thresholds (O(1))
   PriceCategory getCategoryForPrice(double? price) {
     if (price == null) return PriceCategory.unknown;
-    if (_lowPriceThreshold == null || _highPriceThreshold == null)
+    if (_lowPriceThreshold == null || _highPriceThreshold == null) {
       return PriceCategory.medium;
+    }
 
     if (price <= _lowPriceThreshold!) return PriceCategory.low;
     if (price >= _highPriceThreshold!) return PriceCategory.high;

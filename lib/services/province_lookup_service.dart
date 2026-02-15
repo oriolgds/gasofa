@@ -1,4 +1,5 @@
 /// Service to map coordinates to Spanish provinces and find nearby provinces
+library;
 
 class ProvinceLookupService {
   static final ProvinceLookupService _instance =

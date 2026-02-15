@@ -1,4 +1,5 @@
 /// Gas station model with price and location data
+library;
 
 import 'fuel_type.dart';
 

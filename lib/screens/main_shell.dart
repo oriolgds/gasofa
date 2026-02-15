@@ -1,4 +1,5 @@
 /// Main shell with bottom navigation bar
+library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -17,7 +18,7 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
-  FuelType _selectedFuelType = FuelType.gasolina95;
+  final FuelType _selectedFuelType = FuelType.gasolina95;
 
   @override
   void initState() {

@@ -1,4 +1,5 @@
 /// Price badge widget with color-coded indicator
+library;
 
 import 'package:flutter/material.dart';
 import '../config/constants.dart';
@@ -48,7 +49,7 @@ class PriceBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            price != null ? '${price!.toStringAsFixed(3)}' : '-',
+            price != null ? price!.toStringAsFixed(3) : '-',
             style: TextStyle(
               color: textColor,
               fontWeight: FontWeight.bold,

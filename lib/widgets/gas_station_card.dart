@@ -1,4 +1,5 @@
 /// Gas station card widget for list view
+library;
 
 import 'package:flutter/material.dart';
 import '../models/gas_station.dart';

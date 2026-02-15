@@ -1,4 +1,5 @@
 /// API Service for fetching gas station data from the Ministry of Industry
+library;
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;

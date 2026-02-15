@@ -1,4 +1,5 @@
 /// Distance service for calculating distances between locations
+library;
 
 import 'package:geolocator/geolocator.dart';
 import '../models/gas_station.dart';

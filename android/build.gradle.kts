@@ -20,11 +20,13 @@ subprojects {
 
     if (project.path != ":app") {
         project.pluginManager.withPlugin("com.android.library") {
-            project.extensions.configure<com.android.build.gradle.BaseExtension> {
-                compileOptions {
-                    sourceCompatibility = JavaVersion.VERSION_17
-                    targetCompatibility = JavaVersion.VERSION_17
-                }
+            val android = project.extensions.getByType(com.android.build.gradle.LibraryExtension::class.java)
+            if (project.name == "isar_flutter_libs") {
+                android.namespace = "dev.isar.isar_flutter_libs"
+            }
+            android.compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_17
+                targetCompatibility = JavaVersion.VERSION_17
             }
         }
     }
