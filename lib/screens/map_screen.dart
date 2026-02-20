@@ -8,9 +8,9 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/constants.dart';
-import '../models/fuel_type.dart';
 import '../models/gas_station.dart';
 import '../providers/gas_stations_provider.dart';
+import '../widgets/fuel_picker_sheet.dart';
 import 'about_screen.dart';
 
 class MapScreenRedesigned extends StatefulWidget {
@@ -216,7 +216,7 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                 child: Row(
                   children: [
                     GestureDetector(
-                      onTap: () => _showFuelPicker(context, provider),
+                      onTap: () => showFuelPickerSheet(context, provider),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
@@ -401,98 +401,6 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
           ],
         );
       },
-    );
-  }
-
-  void _showFuelPicker(BuildContext context, GasStationsProvider provider) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textLight,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Tipo de combustible',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: FuelType.values.map((fuel) {
-                final isSelected = provider.selectedFuelType == fuel;
-                return GestureDetector(
-                  onTap: () {
-                    provider.setFuelType(fuel);
-                    Navigator.pop(context);
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.primary
-                          : AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(12),
-                      border: isSelected
-                          ? null
-                          : Border.all(
-                              color: AppColors.textLight.withAlpha(51),
-                            ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          fuel.icon,
-                          size: 18,
-                          color: isSelected ? Colors.white : AppColors.text,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          fuel.displayName,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : AppColors.text,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
     );
   }
 }
