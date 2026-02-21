@@ -7,8 +7,26 @@ import '../config/constants.dart';
 import '../models/fuel_type.dart';
 import '../models/gas_station.dart';
 import '../providers/gas_stations_provider.dart';
+import '../services/update_service.dart';
+import '../widgets/fuel_picker_sheet.dart';
 import 'station_detail_screen.dart';
 import 'about_screen.dart';
+
+// Map fuel type to its category colour (mirrors fuel_picker_sheet)
+Color _fuelCategoryColor(FuelType fuel) {
+  switch (fuel) {
+    case FuelType.gasolina95:
+    case FuelType.gasolina98:
+      return const Color(0xFF5B8FC9);
+    case FuelType.dieselA:
+    case FuelType.dieselB:
+    case FuelType.dieselPremium:
+      return const Color(0xFFC49A3C);
+    case FuelType.glp:
+    case FuelType.gnc:
+      return const Color(0xFF5EAD7D);
+  }
+}
 
 class ListScreenRedesigned extends StatelessWidget {
   const ListScreenRedesigned({super.key});
@@ -40,6 +58,10 @@ class ListScreenRedesigned extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, GasStationsProvider provider) {
+    final theme = Theme.of(context);
+    final updateService = context.watch<UpdateService>();
+    final updateAvailable = updateService.updateAvailable;
+
     final stations = provider.filteredStations;
     final cheapest = stations.isNotEmpty
         ? stations.reduce(
@@ -58,7 +80,7 @@ class ListScreenRedesigned extends StatelessWidget {
         right: 20,
         bottom: 20,
       ),
-      decoration: BoxDecoration(color: AppColors.background),
+      decoration: BoxDecoration(color: theme.scaffoldBackgroundColor),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -66,41 +88,50 @@ class ListScreenRedesigned extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               GestureDetector(
-                onTap: () => _showFuelPicker(context, provider),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withAlpha(26),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        provider.selectedFuelType.icon,
-                        size: 16,
-                        color: AppColors.primary,
+                onTap: () => showFuelPickerSheet(context, provider),
+                child: Builder(
+                  builder: (context) {
+                    final color = _fuelCategoryColor(provider.selectedFuelType);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        provider.selectedFuelType.displayName,
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                      decoration: BoxDecoration(
+                        color: color.withAlpha(20),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: color.withAlpha(60),
+                          width: 1,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 16,
-                        color: AppColors.primary,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            provider.selectedFuelType.icon,
+                            size: 14,
+                            color: color,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            provider.selectedFuelType.displayName,
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 14,
+                            color: color,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
               Flexible(
@@ -116,7 +147,7 @@ class ListScreenRedesigned extends StatelessWidget {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceVariant,
+                            color: theme.colorScheme.surfaceContainerHighest,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
@@ -127,7 +158,7 @@ class ListScreenRedesigned extends StatelessWidget {
                                 height: 12,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  color: AppColors.primary,
+                                  color: theme.colorScheme.primary,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -137,7 +168,7 @@ class ListScreenRedesigned extends StatelessWidget {
                                       provider.syncStatus ??
                                       'Cargando...',
                                   style: TextStyle(
-                                    color: AppColors.textSecondary,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -152,7 +183,7 @@ class ListScreenRedesigned extends StatelessWidget {
                         return Text(
                           '${stations.length} gasolineras',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: theme.colorScheme.onSurfaceVariant,
                             fontSize: 13,
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -164,6 +195,23 @@ class ListScreenRedesigned extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              if (updateAvailable)
+                GestureDetector(
+                  onTap: () => updateService.startFlexibleUpdate(),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.priceGood.withAlpha(50),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.system_update_rounded,
+                      size: 20,
+                      color: AppColors.priceGood,
+                    ),
+                  ),
+                ),
               GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -176,13 +224,13 @@ class ListScreenRedesigned extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppColors.surfaceVariant,
+                    color: theme.colorScheme.surfaceContainerHighest,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     Icons.info_outline_rounded,
                     size: 20,
-                    color: AppColors.textSecondary,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -194,11 +242,13 @@ class ListScreenRedesigned extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withAlpha(8),
+                  color: Colors.black.withAlpha(
+                    theme.brightness == Brightness.dark ? 25 : 8,
+                  ),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -206,13 +256,17 @@ class ListScreenRedesigned extends StatelessWidget {
             ),
             child: TextField(
               onChanged: provider.setSearchQuery,
+              style: TextStyle(color: theme.colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: 'Buscar por nombre...',
-                hintStyle: TextStyle(color: AppColors.textLight, fontSize: 14),
+                hintStyle: TextStyle(
+                  color: theme.colorScheme.onSurfaceVariant.withAlpha(150),
+                  fontSize: 14,
+                ),
                 border: InputBorder.none,
                 icon: Icon(
                   Icons.search_rounded,
-                  color: AppColors.textLight,
+                  color: theme.colorScheme.onSurfaceVariant,
                   size: 20,
                 ),
                 suffixIcon: provider.searchQuery.isNotEmpty
@@ -220,7 +274,7 @@ class ListScreenRedesigned extends StatelessWidget {
                         onTap: () => provider.setSearchQuery(''),
                         child: Icon(
                           Icons.close_rounded,
-                          color: AppColors.textLight,
+                          color: theme.colorScheme.onSurfaceVariant,
                           size: 18,
                         ),
                       )
@@ -234,11 +288,13 @@ class ListScreenRedesigned extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withAlpha(8),
+                    color: Colors.black.withAlpha(
+                      theme.brightness == Brightness.dark ? 25 : 8,
+                    ),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -266,7 +322,7 @@ class ListScreenRedesigned extends StatelessWidget {
                         Text(
                           'Más barata',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: theme.colorScheme.onSurfaceVariant,
                             fontSize: 12,
                           ),
                         ),
@@ -274,7 +330,7 @@ class ListScreenRedesigned extends StatelessWidget {
                         Text(
                           cheapest.name,
                           style: TextStyle(
-                            color: AppColors.text,
+                            color: theme.colorScheme.onSurface,
                             fontWeight: FontWeight.w600,
                             fontSize: 15,
                           ),
@@ -301,7 +357,7 @@ class ListScreenRedesigned extends StatelessWidget {
                       Text(
                         '€/L',
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: theme.colorScheme.onSurfaceVariant,
                           fontSize: 11,
                         ),
                       ),
@@ -361,12 +417,13 @@ class ListScreenRedesigned extends StatelessWidget {
     String label, {
     bool enabled = true,
   }) {
+    final theme = Theme.of(context);
     final isSelected = provider.sortMode == mode;
     final color = !enabled
-        ? AppColors.textLight
+        ? theme.colorScheme.onSurfaceVariant.withAlpha(120)
         : isSelected
-        ? Colors.white
-        : AppColors.text;
+        ? theme.colorScheme.onPrimary
+        : theme.colorScheme.onSurface;
 
     return GestureDetector(
       onTap: enabled ? () => provider.setSortMode(mode) : null,
@@ -374,11 +431,13 @@ class ListScreenRedesigned extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surface,
+          color: isSelected
+              ? theme.colorScheme.primary
+              : theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: isSelected
               ? null
-              : Border.all(color: AppColors.textLight.withAlpha(77)),
+              : Border.all(color: theme.colorScheme.outlineVariant),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -422,6 +481,7 @@ class ListScreenRedesigned extends StatelessWidget {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -431,13 +491,13 @@ class ListScreenRedesigned extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: theme.colorScheme.surfaceContainerHighest,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.local_gas_station_outlined,
                 size: 48,
-                color: AppColors.textLight,
+                color: theme.colorScheme.onSurfaceVariant.withAlpha(150),
               ),
             ),
             const SizedBox(height: 20),
@@ -446,14 +506,17 @@ class ListScreenRedesigned extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: AppColors.text,
+                color: theme.colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               'Cambia el tipo de combustible o espera mientras cargamos los datos',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              style: TextStyle(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 14,
+              ),
             ),
           ],
         ),
@@ -462,6 +525,7 @@ class ListScreenRedesigned extends StatelessWidget {
   }
 
   Widget _buildErrorState(BuildContext context, GasStationsProvider provider) {
+    final theme = Theme.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -486,14 +550,17 @@ class ListScreenRedesigned extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: AppColors.text,
+                color: theme.colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               provider.errorMessage ?? 'Ocurrió un error inesperado',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+              style: TextStyle(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 14,
+              ),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -501,7 +568,8 @@ class ListScreenRedesigned extends StatelessWidget {
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Reintentar'),
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: theme.colorScheme.onPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -518,98 +586,6 @@ class ListScreenRedesigned extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (context) => StationDetailScreen(station: station),
-      ),
-    );
-  }
-
-  void _showFuelPicker(BuildContext context, GasStationsProvider provider) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textLight,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Tipo de combustible',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: AppColors.text,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: FuelType.values.map((fuel) {
-                final isSelected = provider.selectedFuelType == fuel;
-                return GestureDetector(
-                  onTap: () {
-                    provider.setFuelType(fuel);
-                    Navigator.pop(context);
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? AppColors.primary
-                          : AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(12),
-                      border: isSelected
-                          ? null
-                          : Border.all(
-                              color: AppColors.textLight.withAlpha(51),
-                            ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          fuel.icon,
-                          size: 18,
-                          color: isSelected ? Colors.white : AppColors.text,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          fuel.displayName,
-                          style: TextStyle(
-                            color: isSelected ? Colors.white : AppColors.text,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
       ),
     );
   }
@@ -643,6 +619,7 @@ class _StationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final price = station.getPrice(fuelType);
 
     return GestureDetector(
@@ -651,11 +628,13 @@ class _StationCard extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: theme.colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha(8),
+              color: Colors.black.withAlpha(
+                theme.brightness == Brightness.dark ? 25 : 8,
+              ),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -702,7 +681,7 @@ class _StationCard extends StatelessWidget {
                   Text(
                     station.name,
                     style: TextStyle(
-                      color: AppColors.text,
+                      color: theme.colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
                     ),
@@ -713,7 +692,7 @@ class _StationCard extends StatelessWidget {
                   Text(
                     station.address,
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: theme.colorScheme.onSurfaceVariant,
                       fontSize: 13,
                     ),
                     maxLines: 1,
@@ -726,13 +705,13 @@ class _StationCard extends StatelessWidget {
                         Icon(
                           Icons.near_me_rounded,
                           size: 14,
-                          color: AppColors.textLight,
+                          color: theme.colorScheme.outline,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           station.distanceFormatted,
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: theme.colorScheme.onSurfaceVariant,
                             fontSize: 12,
                           ),
                         ),
@@ -741,14 +720,14 @@ class _StationCard extends StatelessWidget {
                       Icon(
                         Icons.schedule_rounded,
                         size: 14,
-                        color: AppColors.textLight,
+                        color: theme.colorScheme.outline,
                       ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           station.schedule,
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: theme.colorScheme.onSurfaceVariant,
                             fontSize: 12,
                           ),
                           maxLines: 1,
@@ -762,7 +741,7 @@ class _StationCard extends StatelessWidget {
             ),
 
             // Arrow
-            Icon(Icons.chevron_right_rounded, color: AppColors.textLight),
+            Icon(Icons.chevron_right_rounded, color: theme.colorScheme.outline),
           ],
         ),
       ),

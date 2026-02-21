@@ -6,7 +6,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../config/constants.dart';
 import '../models/gas_station.dart';
 import '../models/fuel_type.dart';
 import '../providers/gas_stations_provider.dart';
@@ -18,28 +17,28 @@ class StationDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Consumer<GasStationsProvider>(
       builder: (context, provider, _) {
         return Scaffold(
-          backgroundColor: AppColors.background,
+          backgroundColor: theme.scaffoldBackgroundColor,
           body: CustomScrollView(
             slivers: [
               // App bar
               SliverAppBar(
                 expandedHeight: 200,
                 pinned: true,
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                flexibleSpace: FlexibleSpaceBar(background: _buildMiniMap()),
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: theme.colorScheme.onPrimary,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: _buildMiniMap(context),
+                ),
                 leading: IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withAlpha(51),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.arrow_back_rounded, size: 20),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black.withAlpha(51),
+                    foregroundColor: theme.colorScheme.onPrimary,
                   ),
                 ),
               ),
@@ -52,15 +51,15 @@ class StationDetailScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Station info
-                      _buildStationInfo(),
+                      _buildStationInfo(theme),
                       const SizedBox(height: 24),
 
                       // All prices
-                      _buildPricesSection(provider.selectedFuelType),
+                      _buildPricesSection(theme, provider.selectedFuelType),
                       const SizedBox(height: 24),
 
                       // Actions
-                      _buildActionsSection(context),
+                      _buildActionsSection(context, theme),
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -73,52 +72,91 @@ class StationDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMiniMap() {
-    return FlutterMap(
-      options: MapOptions(
-        initialCenter: LatLng(station.latitude, station.longitude),
-        initialZoom: 15,
-        interactionOptions: const InteractionOptions(
-          flags: InteractiveFlag.none,
-        ),
-      ),
+  Widget _buildMiniMap(BuildContext context) {
+    final theme = Theme.of(context);
+    return Stack(
       children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.gasofa.app',
-        ),
-        MarkerLayer(
-          markers: [
-            Marker(
-              point: LatLng(station.latitude, station.longitude),
-              width: 40,
-              height: 40,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withAlpha(77),
-                      blurRadius: 10,
+        FlutterMap(
+          options: MapOptions(
+            initialCenter: LatLng(station.latitude, station.longitude),
+            initialZoom: 15,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.none,
+            ),
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.gasofa.app',
+            ),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: LatLng(station.latitude, station.longitude),
+                  width: 40,
+                  height: 40,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.colorScheme.primary.withAlpha(77),
+                          blurRadius: 10,
+                        ),
+                      ],
                     ),
-                  ],
+                    child: const Icon(
+                      Icons.local_gas_station_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
                 ),
-                child: const Icon(
-                  Icons.local_gas_station_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
+              ],
             ),
           ],
+        ),
+        // Expand button
+        Positioned(
+          right: 12,
+          bottom: 12,
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => _FullScreenMapScreen(station: station),
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withAlpha(230),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(26),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.fullscreen_rounded,
+                color: theme.colorScheme.onSurface,
+                size: 24,
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildStationInfo() {
+  Widget _buildStationInfo(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -127,7 +165,7 @@ class StationDetailScreen extends StatelessWidget {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: AppColors.text,
+            color: theme.colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 8),
@@ -136,13 +174,16 @@ class StationDetailScreen extends StatelessWidget {
             Icon(
               Icons.location_on_rounded,
               size: 16,
-              color: AppColors.textSecondary,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
                 station.address,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                style: TextStyle(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 14,
+                ),
               ),
             ),
           ],
@@ -153,13 +194,16 @@ class StationDetailScreen extends StatelessWidget {
             Icon(
               Icons.schedule_rounded,
               size: 16,
-              color: AppColors.textSecondary,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
                 station.schedule,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                style: TextStyle(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 14,
+                ),
               ),
             ),
           ],
@@ -171,12 +215,15 @@ class StationDetailScreen extends StatelessWidget {
               Icon(
                 Icons.near_me_rounded,
                 size: 16,
-                color: AppColors.textSecondary,
+                color: theme.colorScheme.outline,
               ),
               const SizedBox(width: 4),
               Text(
                 station.distanceFormatted,
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                style: TextStyle(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 14,
+                ),
               ),
             ],
           ),
@@ -185,7 +232,7 @@ class StationDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPricesSection(FuelType selectedFuelType) {
+  Widget _buildPricesSection(ThemeData theme, FuelType selectedFuelType) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -194,7 +241,7 @@ class StationDetailScreen extends StatelessWidget {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: AppColors.text,
+            color: theme.colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 12),
@@ -207,12 +254,14 @@ class StationDetailScreen extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppColors.primary.withAlpha(26)
-                  : AppColors.surface,
+                  ? theme.colorScheme.primaryContainer.withAlpha(80)
+                  : theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: isSelected
-                  ? Border.all(color: AppColors.primary, width: 2)
-                  : Border.all(color: AppColors.surfaceVariant),
+                  ? Border.all(color: theme.colorScheme.primary, width: 2)
+                  : Border.all(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                    ),
             ),
             child: Row(
               children: [
@@ -220,15 +269,17 @@ class StationDetailScreen extends StatelessWidget {
                   fuelType.icon,
                   size: 20,
                   color: isSelected
-                      ? AppColors.primary
-                      : AppColors.textSecondary,
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     fuelType.displayName,
                     style: TextStyle(
-                      color: isSelected ? AppColors.primary : AppColors.text,
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface,
                       fontWeight: isSelected
                           ? FontWeight.w600
                           : FontWeight.normal,
@@ -239,8 +290,10 @@ class StationDetailScreen extends StatelessWidget {
                   price != null ? '${price.toStringAsFixed(3)} €/L' : '-',
                   style: TextStyle(
                     color: price != null
-                        ? (isSelected ? AppColors.primary : AppColors.text)
-                        : AppColors.textLight,
+                        ? (isSelected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurface)
+                        : theme.colorScheme.onSurfaceVariant.withAlpha(120),
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
                   ),
@@ -253,7 +306,7 @@ class StationDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActionsSection(BuildContext context) {
+  Widget _buildActionsSection(BuildContext context, ThemeData theme) {
     return Column(
       children: [
         SizedBox(
@@ -263,8 +316,8 @@ class StationDetailScreen extends StatelessWidget {
             icon: const Icon(Icons.directions_rounded),
             label: const Text('Cómo llegar'),
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: theme.colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -280,12 +333,12 @@ class StationDetailScreen extends StatelessWidget {
             icon: const Icon(Icons.map_rounded),
             label: const Text('Ver en Google Maps'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
+              foregroundColor: theme.colorScheme.primary,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              side: BorderSide(color: AppColors.primary),
+              side: BorderSide(color: theme.colorScheme.primary),
             ),
           ),
         ),
@@ -311,5 +364,77 @@ class StationDetailScreen extends StatelessWidget {
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
+  }
+}
+
+class _FullScreenMapScreen extends StatelessWidget {
+  final GasStation station;
+
+  const _FullScreenMapScreen({required this.station});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded, size: 20),
+            style: IconButton.styleFrom(
+              backgroundColor: theme.colorScheme.surface.withAlpha(200),
+              foregroundColor: theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+      ),
+      body: FlutterMap(
+        options: MapOptions(
+          initialCenter: LatLng(station.latitude, station.longitude),
+          initialZoom: 16,
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+          ),
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.gasofa.app',
+          ),
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: LatLng(station.latitude, station.longitude),
+                width: 48,
+                height: 48,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.colorScheme.primary.withAlpha(100),
+                        blurRadius: 15,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.local_gas_station_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

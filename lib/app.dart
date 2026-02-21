@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'config/constants.dart';
+import 'config/theme.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/main_shell.dart';
 
@@ -24,14 +24,9 @@ class _GasofaAppState extends State<GasofaApp> {
     super.initState();
     _showOnboarding = widget.isFirstLaunch;
 
-    // Set system UI style
+    // Set system UI style for light/dark
     SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        systemNavigationBarColor: AppColors.surface,
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
+      const SystemUiOverlayStyle(statusBarColor: Colors.transparent),
     );
   }
 
@@ -40,50 +35,9 @@ class _GasofaAppState extends State<GasofaApp> {
     return MaterialApp(
       title: 'GASOFA',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.light(
-          primary: AppColors.primary,
-          secondary: AppColors.secondary,
-          surface: AppColors.surface,
-          onPrimary: Colors.white,
-          onSecondary: Colors.white,
-          onSurface: AppColors.text,
-        ),
-        scaffoldBackgroundColor: AppColors.background,
-        fontFamily: 'SF Pro Display',
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          foregroundColor: AppColors.text,
-        ),
-        cardTheme: CardThemeData(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          color: AppColors.surface,
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            minimumSize: const Size(0, 48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
-        ),
-        chipTheme: ChipThemeData(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      ),
+      themeMode: ThemeMode.system,
+      theme: GasofaTheme.lightTheme,
+      darkTheme: GasofaTheme.darkTheme,
       home: _showOnboarding
           ? OnboardingScreen(
               onComplete: () {
