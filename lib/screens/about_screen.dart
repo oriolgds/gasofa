@@ -257,11 +257,13 @@ class _UpdateCard extends StatefulWidget {
 }
 
 class _UpdateCardState extends State<_UpdateCard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   bool _isChecking = false;
   bool? _isUpToDate;
 
   late AnimationController _rotationController;
+  late AnimationController _pulseController;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -270,11 +272,20 @@ class _UpdateCardState extends State<_UpdateCard>
       vsync: this,
       duration: const Duration(seconds: 1),
     );
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.02).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
   }
 
   @override
   void dispose() {
     _rotationController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -285,14 +296,21 @@ class _UpdateCardState extends State<_UpdateCard>
     });
 
     _rotationController.repeat();
+    _pulseController.repeat(reverse: true);
 
     // Minimum delay for UI polish
-    final minDelay = Future.delayed(const Duration(milliseconds: 1500));
+    final minDelay = Future.delayed(const Duration(milliseconds: 2000));
     await Future.wait([updateService.checkForUpdate(), minDelay]);
 
     if (!mounted) return;
 
     _rotationController.stop();
+    _pulseController.stop();
+    _pulseController.animateTo(
+      0.0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
 
     setState(() {
       _isChecking = false;
@@ -374,88 +392,134 @@ class _UpdateCardState extends State<_UpdateCard>
       );
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOut,
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: _isUpToDate == true
-              ? Colors.green.withAlpha(100)
-              : theme.colorScheme.outlineVariant.withAlpha(100),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(
-              theme.brightness == Brightness.dark ? 20 : 10,
-            ),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
+    return ScaleTransition(
+      scale: _isChecking ? _scaleAnimation : const AlwaysStoppedAnimation(1.0),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.fastOutSlowIn,
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: _isUpToDate == true
+                ? Colors.green.withAlpha(100)
+                : theme.colorScheme.outlineVariant.withAlpha(100),
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: iconColor.withAlpha(26),
-                  shape: BoxShape.circle,
-                ),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: SizedBox(key: ValueKey(title), child: icon),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      child: Text(
-                        title,
-                        key: ValueKey(title),
-                        style: TextStyle(
-                          color: textColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
-                      ),
+          boxShadow: [
+            BoxShadow(
+              color: _isChecking
+                  ? theme.colorScheme.primary.withAlpha(40)
+                  : Colors.black.withAlpha(
+                      theme.brightness == Brightness.dark ? 20 : 10,
                     ),
-                    const SizedBox(height: 4),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      child: Text(
-                        subtitle,
-                        key: ValueKey(subtitle),
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 13,
-                          height: 1.3,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (actionButton != null) ...[
-            const SizedBox(height: 20),
-            AnimatedOpacity(
-              opacity: 1.0,
-              duration: const Duration(milliseconds: 500),
-              child: SizedBox(width: double.infinity, child: actionButton),
+              blurRadius: _isChecking ? 24 : 15,
+              spreadRadius: _isChecking ? 2 : 0,
+              offset: const Offset(0, 4),
             ),
           ],
-        ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: iconColor.withAlpha(26),
+                    shape: BoxShape.circle,
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    transitionBuilder: (child, animation) {
+                      return ScaleTransition(
+                        scale: animation,
+                        child: FadeTransition(opacity: animation, child: child),
+                      );
+                    },
+                    child: SizedBox(key: ValueKey(title), child: icon),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 400),
+                        transitionBuilder: (child, animation) {
+                          return SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0.0, 0.2),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Text(
+                          title,
+                          key: ValueKey(title),
+                          style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 400),
+                        transitionBuilder: (child, animation) {
+                          return SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0.0, 0.2),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Text(
+                          subtitle,
+                          key: ValueKey(subtitle),
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 13,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.fastOutSlowIn,
+              alignment: Alignment.topCenter,
+              child: actionButton != null
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: AnimatedOpacity(
+                        opacity: 1.0,
+                        duration: const Duration(milliseconds: 500),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: actionButton,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
       ),
     );
   }
