@@ -28,6 +28,26 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
   LatLngBounds? _currentBounds;
   double _currentZoom = 6.0;
 
+  int _selectedLayerIndex = 0;
+  final List<Map<String, String>> _mapLayers = [
+    {
+      'name': 'Estándar (OSM)',
+      'url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    },
+    {
+      'name': 'Carto Claro',
+      'url': 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+    },
+    {
+      'name': 'Carto Oscuro',
+      'url': 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+    },
+    {
+      'name': 'Topográfico',
+      'url': 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
+    },
+  ];
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -71,6 +91,7 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
               options: MapOptions(
                 initialCenter: LatLng(centerLat, centerLng),
                 initialZoom: zoom,
+                maxZoom: 18.0,
                 onMapReady: () {
                   if (mounted) {
                     setState(() {
@@ -97,9 +118,9 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                 ),
               ),
               children: [
-                // OpenStreetMap tiles
+                // Map tiles based on selected layer
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: _mapLayers[_selectedLayerIndex]['url']!,
                   userAgentPackageName: 'com.gasofa.app',
                 ),
 
@@ -386,26 +407,86 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                 ),
               ),
 
-            // Re-center button
-            if (provider.userPosition != null)
-              Positioned(
-                right: 16,
-                bottom: _selectedStation != null ? 180 : 100,
-                child: GestureDetector(
-                  onTap: () {
-                    _mapController.move(
-                      LatLng(
-                        provider.userPosition!.latitude,
-                        provider.userPosition!.longitude,
+            // Map Controls (Layers, Zoom, Recenter)
+            Positioned(
+              right: 16,
+              bottom: _selectedStation != null ? 180 : 100,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Layers button
+                  PopupMenuButton<int>(
+                    initialValue: _selectedLayerIndex,
+                    onSelected: (int index) {
+                      setState(() {
+                        _selectedLayerIndex = index;
+                      });
+                    },
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    offset: const Offset(-10, 0),
+                    itemBuilder: (BuildContext context) {
+                      return List<PopupMenuEntry<int>>.generate(
+                        _mapLayers.length,
+                        (int index) {
+                          return PopupMenuItem<int>(
+                            value: index,
+                            child: Row(
+                              children: [
+                                Icon(
+                                  index == _selectedLayerIndex
+                                      ? Icons.check_circle_rounded
+                                      : Icons.radio_button_unchecked,
+                                  color: index == _selectedLayerIndex
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.onSurfaceVariant,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  _mapLayers[index]['name']!,
+                                  style: TextStyle(
+                                    fontWeight: index == _selectedLayerIndex
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(
+                              theme.brightness == Brightness.dark ? 25 : 20,
+                            ),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      14.0,
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
+                      child: Icon(
+                        Icons.layers_rounded,
+                        color: theme.colorScheme.primary,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Zoom controls
+                  Container(
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceContainerHighest,
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withAlpha(
@@ -416,14 +497,97 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                         ),
                       ],
                     ),
-                    child: Icon(
-                      Icons.my_location_rounded,
-                      color: theme.colorScheme.primary,
-                      size: 22,
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            final currentZoom = _mapController.camera.zoom;
+                            if (currentZoom < 18.0) {
+                              _mapController.move(
+                                _mapController.camera.center,
+                                currentZoom + 1.0,
+                              );
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Icon(
+                              Icons.add_rounded,
+                              color: theme.colorScheme.primary,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          height: 1,
+                          width: 24,
+                          color: theme.colorScheme.outlineVariant,
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            final currentZoom = _mapController.camera.zoom;
+                            if (currentZoom > 3.0) {
+                              _mapController.move(
+                                _mapController.camera.center,
+                                currentZoom - 1.0,
+                              );
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Icon(
+                              Icons.remove_rounded,
+                              color: theme.colorScheme.primary,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
+
+                  // Re-center button
+                  if (provider.userPosition != null) ...[
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () async {
+                        await provider.fetchUserLocation();
+                        if (provider.userPosition != null) {
+                          _mapController.move(
+                            LatLng(
+                              provider.userPosition!.latitude,
+                              provider.userPosition!.longitude,
+                            ),
+                            14.0,
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(
+                                theme.brightness == Brightness.dark ? 25 : 20,
+                              ),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.my_location_rounded,
+                          color: theme.colorScheme.primary,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
+            ),
 
             // Selected station sheet
             if (_selectedStation != null)

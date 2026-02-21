@@ -24,8 +24,12 @@ class AboutScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Acerca de'),
-        backgroundColor: theme.colorScheme.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: theme.brightness == Brightness.dark
+            ? null
+            : theme.colorScheme.primary,
+        foregroundColor: theme.brightness == Brightness.dark
+            ? null
+            : Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
