@@ -551,8 +551,24 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                     const SizedBox(height: 12),
                     GestureDetector(
                       onTap: () async {
-                        await provider.fetchUserLocation();
                         if (provider.userPosition != null) {
+                          _mapController.move(
+                            LatLng(
+                              provider.userPosition!.latitude,
+                              provider.userPosition!.longitude,
+                            ),
+                            14.0,
+                          );
+                        }
+
+                        final previousCenter = _mapController.camera.center;
+                        final previousZoom = _mapController.camera.zoom;
+
+                        await provider.fetchUserLocation();
+
+                        if (provider.userPosition != null &&
+                            _mapController.camera.center == previousCenter &&
+                            _mapController.camera.zoom == previousZoom) {
                           _mapController.move(
                             LatLng(
                               provider.userPosition!.latitude,
