@@ -3,9 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../config/constants.dart';
 import '../providers/gas_stations_provider.dart';
-import '../services/update_service.dart';
 import '../widgets/fuel_picker_sheet.dart';
 import 'list_screen.dart';
 import 'map_screen.dart';
@@ -19,18 +17,12 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _pageIndex = 0;
-  final _updateService = UpdateService();
-  bool _updateAvailable = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadInitialData();
-      await _updateService.checkForUpdate();
-      if (mounted && _updateService.updateAvailable) {
-        setState(() => _updateAvailable = true);
-      }
     });
   }
 
@@ -54,24 +46,25 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: IndexedStack(
         index: _pageIndex,
         children: const [ListScreenRedesigned(), MapScreenRedesigned()],
       ),
-      bottomNavigationBar: _buildBottomNav(),
+      bottomNavigationBar: _buildBottomNav(context),
     );
   }
 
-  Widget _buildBottomNav() {
+  Widget _buildBottomNav(BuildContext context) {
+    final theme = Theme.of(context);
     return Consumer<GasStationsProvider>(
       builder: (context, provider, _) {
         return Container(
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: theme.colorScheme.surface,
             border: Border(
               top: BorderSide(
-                color: AppColors.textLight.withAlpha(40),
+                color: theme.colorScheme.outlineVariant,
                 width: 0.5,
               ),
             ),
@@ -98,13 +91,6 @@ class _MainShellState extends State<MainShell> {
                     selected: _navIndex == 2,
                     onTap: () => _onNavTap(2),
                   ),
-                  if (_updateAvailable)
-                    _UpdateNavItem(
-                      onTap: () async {
-                        await _updateService.startFlexibleUpdate();
-                        setState(() => _updateAvailable = false);
-                      },
-                    ),
                 ],
               ),
             ),
@@ -132,7 +118,10 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.primary : AppColors.textLight;
+    final theme = Theme.of(context);
+    final color = selected
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
 
     return Expanded(
       child: GestureDetector(
@@ -168,6 +157,7 @@ class _FuelNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -175,87 +165,44 @@ class _FuelNavItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // A simple icon + tiny selector arrow — nothing fancy
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  Icons.local_gas_station_rounded,
-                  size: 24,
-                  color: AppColors.textSecondary,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withAlpha(80),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withAlpha(50),
+                  width: 1,
                 ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.swap_vert_rounded,
-                      size: 9,
-                      color: Colors.white,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.local_gas_station_rounded,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      selectedFuelType,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Text(
-              selectedFuelType,
-              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Update notification item ───────────────────────────────────────────────
-
-class _UpdateNavItem extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _UpdateNavItem({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 64,
-        height: double.infinity,
-        color: Colors.transparent,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.priceGood.withAlpha(30),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.system_update_rounded,
-                size: 16,
-                color: AppColors.priceGood,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              'Actualizar',
-              style: TextStyle(
-                fontSize: 10,
-                color: AppColors.priceGood,
-                fontWeight: FontWeight.w600,
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
+                ],
               ),
             ),
           ],

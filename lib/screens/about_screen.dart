@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/update_service.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -76,6 +79,8 @@ class AboutScreen extends StatelessWidget {
                       return const SizedBox.shrink();
                     },
                   ),
+                  const SizedBox(height: 16),
+                  const _UpdateCard(),
                   const SizedBox(height: 32),
                 ],
               ),
@@ -239,6 +244,218 @@ class AboutScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _UpdateCard extends StatefulWidget {
+  const _UpdateCard();
+
+  @override
+  State<_UpdateCard> createState() => _UpdateCardState();
+}
+
+class _UpdateCardState extends State<_UpdateCard>
+    with SingleTickerProviderStateMixin {
+  bool _isChecking = false;
+  bool? _isUpToDate;
+
+  late AnimationController _rotationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkUpdate(UpdateService updateService) async {
+    setState(() {
+      _isChecking = true;
+      _isUpToDate = null;
+    });
+
+    _rotationController.repeat();
+
+    // Minimum delay for UI polish
+    final minDelay = Future.delayed(const Duration(milliseconds: 1500));
+    await Future.wait([updateService.checkForUpdate(), minDelay]);
+
+    if (!mounted) return;
+
+    _rotationController.stop();
+
+    setState(() {
+      _isChecking = false;
+      _isUpToDate = !updateService.updateAvailable;
+    });
+
+    // Revert visual state after 4 seconds if it was up to date
+    if (_isUpToDate == true) {
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _isUpToDate = null);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final updateService = context.watch<UpdateService>();
+
+    Color cardColor;
+    Color iconColor;
+    Color textColor;
+    Widget icon;
+    String title;
+    String subtitle;
+    Widget? actionButton;
+
+    if (_isChecking) {
+      cardColor = theme.colorScheme.surfaceContainerHighest;
+      iconColor = theme.colorScheme.primary;
+      textColor = theme.colorScheme.onSurface;
+      icon = RotationTransition(
+        turns: _rotationController,
+        child: Icon(Icons.sync_rounded, color: iconColor, size: 28),
+      );
+      title = 'Buscando actualizaciones...';
+      subtitle = 'Comprobando la última versión disponible';
+    } else if (_isUpToDate == true) {
+      cardColor = Colors.green.withAlpha(20);
+      iconColor = Colors.green;
+      textColor = theme.colorScheme.onSurface;
+      icon = Icon(Icons.check_circle_rounded, color: iconColor, size: 28);
+      title = '¡Estás al día!';
+      subtitle = 'Tienes la versión más reciente instalada';
+    } else if (updateService.updateAvailable) {
+      cardColor = theme.colorScheme.primaryContainer.withAlpha(50);
+      iconColor = theme.colorScheme.primary;
+      textColor = theme.colorScheme.onSurface;
+      icon = Icon(Icons.system_update_rounded, color: iconColor, size: 28);
+      title = 'Actualización disponible';
+      subtitle =
+          'Descarga la última versión para disfrutar de nuevas funciones';
+      actionButton = FilledButton.icon(
+        onPressed: () {
+          updateService.startFlexibleUpdate();
+        },
+        icon: const Icon(Icons.download_rounded),
+        label: const Text('Actualizar ahora'),
+        style: FilledButton.styleFrom(
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: theme.colorScheme.onPrimary,
+        ),
+      );
+    } else {
+      cardColor = theme.colorScheme.surface;
+      iconColor = theme.colorScheme.primary;
+      textColor = theme.colorScheme.onSurface;
+      icon = Icon(Icons.update_rounded, color: iconColor, size: 28);
+      title = 'Buscar actualizaciones';
+      subtitle = 'Mantén la app actualizada para el mejor rendimiento';
+      actionButton = OutlinedButton.icon(
+        onPressed: () => _checkUpdate(updateService),
+        icon: const Icon(Icons.search_rounded),
+        label: const Text('Comprobar ahora'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: theme.colorScheme.primary,
+          side: BorderSide(color: theme.colorScheme.primary.withAlpha(100)),
+        ),
+      );
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: _isUpToDate == true
+              ? Colors.green.withAlpha(100)
+              : theme.colorScheme.outlineVariant.withAlpha(100),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(
+              theme.brightness == Brightness.dark ? 20 : 10,
+            ),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: iconColor.withAlpha(26),
+                  shape: BoxShape.circle,
+                ),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: SizedBox(key: ValueKey(title), child: icon),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: Text(
+                        title,
+                        key: ValueKey(title),
+                        style: TextStyle(
+                          color: textColor,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      child: Text(
+                        subtitle,
+                        key: ValueKey(subtitle),
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (actionButton != null) ...[
+            const SizedBox(height: 20),
+            AnimatedOpacity(
+              opacity: 1.0,
+              duration: const Duration(milliseconds: 500),
+              child: SizedBox(width: double.infinity, child: actionButton),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../config/constants.dart';
 import '../models/gas_station.dart';
 import '../providers/gas_stations_provider.dart';
+import '../services/update_service.dart';
 import '../widgets/fuel_picker_sheet.dart';
 import 'about_screen.dart';
 
@@ -35,6 +36,10 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final updateService = context.watch<UpdateService>();
+    final updateAvailable = updateService.updateAvailable;
+
     return Consumer<GasStationsProvider>(
       builder: (context, provider, _) {
         // Default center (Spain)
@@ -111,12 +116,12 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                         height: 24,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: AppColors.primary,
+                            color: theme.colorScheme.primary,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 3),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withAlpha(77),
+                                color: theme.colorScheme.primary.withAlpha(77),
                                 blurRadius: 10,
                               ),
                             ],
@@ -212,7 +217,7 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                   right: 16,
                   bottom: 12,
                 ),
-                decoration: BoxDecoration(color: AppColors.surface),
+                decoration: BoxDecoration(color: theme.colorScheme.surface),
                 child: Row(
                   children: [
                     GestureDetector(
@@ -223,11 +228,13 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: theme.colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withAlpha(13),
+                              color: Colors.black.withAlpha(
+                                theme.brightness == Brightness.dark ? 25 : 13,
+                              ),
                               blurRadius: 8,
                             ),
                           ],
@@ -238,13 +245,13 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                             Icon(
                               provider.selectedFuelType.icon,
                               size: 16,
-                              color: AppColors.text,
+                              color: theme.colorScheme.onSurface,
                             ),
                             const SizedBox(width: 6),
                             Text(
                               provider.selectedFuelType.displayName,
                               style: TextStyle(
-                                color: AppColors.text,
+                                color: theme.colorScheme.onSurface,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
                               ),
@@ -253,13 +260,39 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                             Icon(
                               Icons.keyboard_arrow_down_rounded,
                               size: 16,
-                              color: AppColors.text,
+                              color: theme.colorScheme.onSurface,
                             ),
                           ],
                         ),
                       ),
                     ),
                     const Spacer(),
+                    // Update Button
+                    if (updateAvailable)
+                      GestureDetector(
+                        onTap: () => updateService.startFlexibleUpdate(),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.priceGood.withAlpha(50),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withAlpha(
+                                  theme.brightness == Brightness.dark ? 25 : 13,
+                                ),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.system_update_rounded,
+                            color: AppColors.priceGood,
+                            size: 22,
+                          ),
+                        ),
+                      ),
                     // Info Button
                     GestureDetector(
                       onTap: () {
@@ -273,18 +306,20 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                       child: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: theme.colorScheme.surfaceContainerHighest,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withAlpha(13),
+                              color: Colors.black.withAlpha(
+                                theme.brightness == Brightness.dark ? 25 : 13,
+                              ),
                               blurRadius: 8,
                             ),
                           ],
                         ),
                         child: Icon(
                           Icons.info_outline_rounded,
-                          color: AppColors.text,
+                          color: theme.colorScheme.onSurfaceVariant,
                           size: 22,
                         ),
                       ),
@@ -309,11 +344,13 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: theme.colorScheme.surface,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withAlpha(13),
+                        color: Colors.black.withAlpha(
+                          theme.brightness == Brightness.dark ? 25 : 13,
+                        ),
                         blurRadius: 8,
                       ),
                     ],
@@ -326,7 +363,7 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                         height: 14,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: AppColors.primary,
+                          color: theme.colorScheme.primary,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -337,7 +374,7 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                               'Cargando...',
                           style: TextStyle(
                             fontSize: 12,
-                            color: AppColors.textSecondary,
+                            color: theme.colorScheme.onSurfaceVariant,
                             fontWeight: FontWeight.w500,
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -367,11 +404,13 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: theme.colorScheme.surfaceContainerHighest,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withAlpha(20),
+                          color: Colors.black.withAlpha(
+                            theme.brightness == Brightness.dark ? 25 : 20,
+                          ),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
@@ -379,7 +418,7 @@ class _MapScreenRedesignedState extends State<MapScreenRedesigned> {
                     ),
                     child: Icon(
                       Icons.my_location_rounded,
-                      color: AppColors.primary,
+                      color: theme.colorScheme.primary,
                       size: 22,
                     ),
                   ),
@@ -484,14 +523,17 @@ class _StationSheet extends StatelessWidget {
       PriceCategory.unknown => AppColors.textLight,
     };
 
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: theme.colorScheme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(26),
+            color: Colors.black.withAlpha(
+              theme.brightness == Brightness.dark ? 40 : 26,
+            ),
             blurRadius: 20,
             offset: const Offset(0, -5),
           ),
@@ -507,7 +549,7 @@ class _StationSheet extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textLight,
+                color: theme.colorScheme.outlineVariant,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -553,7 +595,7 @@ class _StationSheet extends StatelessWidget {
                       Text(
                         station.name,
                         style: TextStyle(
-                          color: AppColors.text,
+                          color: theme.colorScheme.onSurface,
                           fontWeight: FontWeight.w600,
                           fontSize: 16,
                         ),
@@ -564,7 +606,7 @@ class _StationSheet extends StatelessWidget {
                       Text(
                         station.address,
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: theme.colorScheme.onSurfaceVariant,
                           fontSize: 13,
                         ),
                         maxLines: 2,
@@ -597,8 +639,8 @@ class _StationSheet extends StatelessWidget {
                     icon: const Icon(Icons.directions_rounded, size: 20),
                     label: const Text('Cómo llegar'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: theme.colorScheme.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -612,12 +654,12 @@ class _StationSheet extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
+                      color: theme.colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       Icons.close_rounded,
-                      color: AppColors.textSecondary,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
