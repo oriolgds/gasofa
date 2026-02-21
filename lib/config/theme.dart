@@ -58,15 +58,15 @@ class GasofaTheme {
         primary:
             AppColors.primaryLight, // Slightly brighter primary for dark mode
         secondary: AppColors.secondary,
-        surface: Color(0xFF1E1E24), // Dark surface
-        surfaceContainerHighest: Color(0xFF2C2C34), // Dark surface variant
+        surface: Color(0xFF121212), // Dark surface
+        surfaceContainerHighest: Color(0xFF1E1E24), // Dark surface variant
         onPrimary: Color(0xFF1A1A1A), // Dark text on light primary
         onSecondary: Color(0xFF1A1A1A),
         onSurface: Color(0xFFE5E5E5), // Light text
         onSurfaceVariant: Color(0xFFA0A0A0), // Lighter secondary text
         outline: Color(0xFF4A4A52), // Darker outline
       ),
-      scaffoldBackgroundColor: const Color(0xFF121212), // Deep dark background
+      scaffoldBackgroundColor: const Color(0xFF000000), // Pure black for AMOLED
       fontFamily: 'SF Pro Display',
       appBarTheme: const AppBarTheme(
         centerTitle: true,
@@ -77,7 +77,7 @@ class GasofaTheme {
       cardTheme: CardThemeData(
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        color: const Color(0xFF1E1E24),
+        color: const Color(0xFF121212),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -94,7 +94,7 @@ class GasofaTheme {
       ),
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: const Color(0xFF1E1E24),
+        backgroundColor: const Color(0xFF121212),
       ),
     );
   }

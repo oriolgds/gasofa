@@ -2,7 +2,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../config/constants.dart';
 import '../models/fuel_type.dart';
 import '../providers/gas_stations_provider.dart';
 
@@ -97,7 +96,7 @@ class _FuelPickerSheet extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: EdgeInsets.only(
@@ -114,7 +113,7 @@ class _FuelPickerSheet extends StatelessWidget {
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textLight,
+                color: Theme.of(context).colorScheme.outline,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -128,7 +127,7 @@ class _FuelPickerSheet extends StatelessWidget {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: AppColors.text,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),
@@ -136,7 +135,10 @@ class _FuelPickerSheet extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
             child: Text(
               'Selecciona el tipo que quieres comparar',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
 
@@ -178,7 +180,7 @@ class _FuelPickerSheet extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   letterSpacing: 0.8,
                 ),
               ),
@@ -210,7 +212,9 @@ class _FuelPickerSheet extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? color.withAlpha(20) : AppColors.surfaceVariant,
+          color: isSelected
+              ? color.withAlpha(20)
+              : Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? color.withAlpha(120) : Colors.transparent,
@@ -222,7 +226,9 @@ class _FuelPickerSheet extends StatelessWidget {
             Icon(
               fuel.icon,
               size: 20,
-              color: isSelected ? color : AppColors.textSecondary,
+              color: isSelected
+                  ? color
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -236,14 +242,16 @@ class _FuelPickerSheet extends StatelessWidget {
                       fontWeight: isSelected
                           ? FontWeight.w600
                           : FontWeight.w500,
-                      color: isSelected ? color : AppColors.text,
+                      color: isSelected
+                          ? color
+                          : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   Text(
                     _descriptionOf(fuel),
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
